@@ -1,0 +1,5 @@
+Title: Requesting AOAI Quota in Azure Government
+
+AOAI quota in Azure Government is not automatically granted. Customers must submit the AOAI Government Access & Quota form, attach a signed sponsor letter, and provide use-case details. Typical processing time is 5-15 business days.
+
+For DoD customers on IL5, quota requests must specify DoD region, model, TPM (tokens per minute) target, and expected concurrent users. Requests for TPM > 300,000 usually require an architectural review with the AOAI Gov team.

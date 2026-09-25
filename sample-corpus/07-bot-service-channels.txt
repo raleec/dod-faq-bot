@@ -1,0 +1,5 @@
+Title: Azure Bot Service Channels
+
+Azure Bot Service supports multiple channels including Microsoft Teams, Web Chat, Direct Line, Direct Line Speech, Slack, and Email. For federal / DoD deployments, only a subset is available and each channel has its own compliance boundary.
+
+For a Teams + Web multi-channel FAQ bot, register the bot in Azure Bot Service, enable the Teams channel, and either enable Web Chat directly or front the bot with Direct Line and host your own Web Chat control on a compliant web tier. In DoD, the Teams channel connects to Teams for GCC-High or Teams for DoD; do not mix commercial Teams with a Gov bot.

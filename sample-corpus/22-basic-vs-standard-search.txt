@@ -1,0 +1,5 @@
+Title: Search SKU: Basic vs Standard
+
+Azure AI Search Basic (~/mo) is fine for a pilot with < 1M documents and low QPS. Standard S1 (~/mo) unlocks higher storage, more partitions/replicas, and (critically for RAG) shared private link support so a Search skillset can call a private-endpointed AOAI or Cognitive Services account.
+
+SKU upgrades are not in-place. To move Basic to Standard, provision a new Standard service, replicate indexes and indexers, cut over endpoints, then delete the Basic service. Plan the cutover for a maintenance window.

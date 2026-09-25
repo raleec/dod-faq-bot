@@ -1,0 +1,5 @@
+Title: CMMC Overview
+
+The Cybersecurity Maturity Model Certification (CMMC) applies to DoD contractors handling FCI and CUI. CMMC 2.0 defines three levels: Level 1 (Foundational, self-assessed), Level 2 (Advanced, third-party assessed for prioritized contracts), and Level 3 (Expert, government assessed).
+
+Azure Government supports customer CMMC compliance up to Level 2 for CUI workloads. Level 3 typically requires additional controls the customer implements on top of the platform. Point customers to the CMMC readiness assessment offering and the Azure compliance blueprints.

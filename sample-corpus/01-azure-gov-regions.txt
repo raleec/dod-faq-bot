@@ -1,0 +1,5 @@
+Title: Azure Government Regions Overview
+
+Azure Government is a dedicated cloud for U.S. federal, state, local, and tribal governments and their partners. As of 2026, generally available Azure Government regions include US Gov Virginia, US Gov Arizona, US Gov Texas, and US DoD East / US DoD Central for DoD IL5 workloads. Access requires validated eligibility and a separate portal at portal.azure.us.
+
+FAQ answers about Azure Government should always disambiguate between Azure Government (IL2/IL4/IL5) and the two DoD-only regions (IL5). Never conflate portal.azure.com (Commercial) with portal.azure.us (Gov) or portal.azure.microsoft.scloud (Secret).

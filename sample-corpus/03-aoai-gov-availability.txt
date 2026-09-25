@@ -1,0 +1,5 @@
+Title: Azure OpenAI Availability in Government
+
+Azure OpenAI Service (AOAI) is available in Azure Government in US Gov Virginia and US Gov Arizona for IL4 workloads. IL5 accreditation for AOAI is progressing; check the Azure Gov compliance offerings page for the current status.
+
+Model availability differs from Commercial. As of 2026, GPT-4o, GPT-4o-mini, text-embedding-3-large, and text-embedding-3-small are typically available in Gov. Bring-your-own-fine-tune and DALL-E are limited. Always confirm the current model list in the Azure Gov docs before writing a customer proposal.

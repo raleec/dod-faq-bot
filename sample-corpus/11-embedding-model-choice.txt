@@ -1,0 +1,5 @@
+Title: Choosing an Embedding Model
+
+For English FAQ corpora, text-embedding-3-large (3072 dims) gives higher retrieval quality than text-embedding-3-small (1536 dims) at ~2x the token cost. Small is a strong default when the corpus is < 10k chunks or latency budget is tight.
+
+Do not mix embeddings from different models in the same index. If you upgrade the embedding model, reindex the entire corpus so all vectors share the same semantic space.

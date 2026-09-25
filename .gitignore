@@ -1,0 +1,46 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# --- Node (for build-docx.js / build-pptx.js) ---
+node_modules/
+package-lock.json
+npm-debug.log*
+
+# --- Local secrets / env ---
+.env
+.env.*
+*.pem
+*.pfx
+*.key
+!bicep/**/*.key
+search-key.txt
+bot-secret.txt
+
+# --- Build artifacts ---
+# PdfPig DLLs auto-downloaded on first ingest
+deploy/lib/
+# transpiled ARM output (regen from .bicep)
+bicep-pilot/main.json
+
+# --- Word/PowerPoint temp/lock ---
+~$*.docx
+~$*.pptx
+~$*.xlsx
+
+# --- OS / IDE ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+
+# --- Azure CLI / tooling ---
+.azure/

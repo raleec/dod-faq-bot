@@ -1,0 +1,5 @@
+Title: Federal ATO Basics
+
+An Authority to Operate (ATO) is a formal decision by an authorizing official (AO) that a system may operate in production and accept residual risk. Federal ATOs are typically issued under NIST SP 800-37 (Risk Management Framework) and require completing a security package (SSP, SAR, POA&M).
+
+Azure Government has FedRAMP High provisional ATO; workloads deployed on top must still complete their own ATO. Reuse the underlying platform's inheritable controls to reduce customer-side burden. For DoD, the analogous framework is the DoD RMF and the Cloud Computing SRG for cloud eligibility.

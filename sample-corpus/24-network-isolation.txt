@@ -1,0 +1,5 @@
+Title: Network Isolation Patterns
+
+For a locked-down RAG deployment, put AOAI, Search, Key Vault, and Storage behind private endpoints in a hub VNet. Front the bot with an App Gateway or Front Door with WAF. VM-based orchestrators need only private IPs; use Azure Bastion for admin access.
+
+Note: AI Search Basic does not support shared private link to reach a private-endpointed AOAI from a skillset. If you need indexer-side enrichment against private-only AOAI, use Search Standard S1 or higher.

@@ -1,0 +1,5 @@
+Title: Escalating Unanswered Questions
+
+Users should be able to flag a bot answer as incorrect or unhelpful. A standard escalation pattern is: bot renders a Flag button -> click posts to an escalation Function -> Function writes a row to a SharePoint list or Dataverse table and posts a Teams notification to the FAQ owners channel.
+
+Include: original question, retrieved chunks, LLM answer, user identity (if consented), and a link back to the conversation. Owners triage, author a corrected answer, and either update the source doc in SharePoint (recommended, self-healing on next indexer run) or add an entry to a curated overrides index.

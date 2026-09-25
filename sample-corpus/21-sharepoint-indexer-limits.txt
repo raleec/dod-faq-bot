@@ -1,0 +1,5 @@
+Title: SharePoint Indexer Limits
+
+The Azure AI Search SharePoint Online indexer supports .docx, .pptx, .xlsx, .pdf, .html, .txt, and a few image formats via OCR skill. Individual document size limit is 16 MB for indexer parsing.
+
+The indexer runs on a schedule (min every 5 minutes) or on demand. It supports incremental refresh via SharePoint change tokens. Item-level ACLs are not applied to search results by default; use the securityTrimming feature and pass the caller's group SIDs at query time if the customer requires ACL trimming.

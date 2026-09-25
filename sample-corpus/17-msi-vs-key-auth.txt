@@ -1,0 +1,5 @@
+Title: Managed Identity vs Key Auth
+
+Managed identities (MI) let Azure resources authenticate to other Azure resources without secrets. There are system-assigned MIs (lifecycle tied to the resource) and user-assigned MIs (shared across resources). Prefer MI over API keys wherever supported.
+
+For AOAI and Azure AI Search, both support Entra-based RBAC. Data-plane RBAC propagation can take 5 to 20 minutes; test after the assignment settles. If a workload cannot use MI (e.g., legacy client, cross-tenant), fall back to Key Vault-managed API keys and rotate on a schedule.

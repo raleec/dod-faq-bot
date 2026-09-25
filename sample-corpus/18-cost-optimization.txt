@@ -1,0 +1,5 @@
+Title: Cost Optimization for RAG Bots
+
+For an FAQ bot at ~10k monthly queries, cost is dominated by AOAI tokens (chat + embeddings) and Search compute. Levers: (a) cache aggressively (L1 exact + L2 semantic), (b) prefer smaller chat models where quality allows (gpt-4o-mini over gpt-4o), (c) trim top-k passages before sending to the LLM, (d) use lower-dim embeddings for L1/L2 caches to cut storage cost.
+
+Budget guidance for ~10k queries/month with a 25-doc corpus: AOAI ~-400, Search Basic , App Service or Function ~, Bot Service free tier, Key Vault + monitoring < . Add ~30% headroom for spikes.

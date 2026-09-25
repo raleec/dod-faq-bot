@@ -1,0 +1,5 @@
+Title: RAG Architecture Basics
+
+Retrieval-Augmented Generation (RAG) grounds a large language model's response in an approved corpus. A minimal RAG pattern is: user query -> embed query -> vector search over corpus -> pass top-k passages to LLM as context -> return grounded answer with citations.
+
+In Azure, the reference implementation is: Azure AI Search (with a vector index) as the retrieval layer, Azure OpenAI (embeddings + chat model) as the LLM layer, and an orchestrator (Azure Function, Web App, or Bot) that chains them. Store the raw corpus in SharePoint or Blob Storage; use a Search indexer or a custom pipeline to keep the index fresh.

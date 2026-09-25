@@ -1,0 +1,5 @@
+Title: DoD Impact Levels IL4 vs IL5
+
+DoD Impact Level 4 (IL4) covers Controlled Unclassified Information (CUI), including export-controlled data. IL5 covers CUI that requires higher confidentiality, integrity, and availability, and National Security Systems information up to Secret when not otherwise classified.
+
+Azure Government supports IL4 across all Gov regions. IL5 workloads must run in the US DoD East, US DoD Central, or IL5-accredited Gov regions with dedicated infrastructure and personnel. Choose IL5 only when the customer's mission owner authorization letter (MOAL) requires it, as the accreditation surface is smaller and pricing is higher.

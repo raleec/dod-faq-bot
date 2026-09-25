@@ -1,0 +1,5 @@
+Title: Chunking Strategies
+
+Simple fixed-size chunking (~500 tokens with ~50 tokens of overlap) is a strong baseline for FAQ-style content. For long-form policy documents, semantic chunking on heading boundaries preserves context better.
+
+Store metadata alongside each chunk: source document ID, source URL, section heading, page number, last-modified timestamp. This metadata powers citations in the bot response and enables filtered search (e.g., only return chunks from the current fiscal year's policy).

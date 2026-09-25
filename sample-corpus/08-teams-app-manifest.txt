@@ -1,0 +1,5 @@
+Title: Teams App Manifest for Bots
+
+A Teams-side app manifest (manifest.json) declares the bot ID, scopes (personal / team / group chat), commands, and permissions. For a bot deployed via Azure Bot Service, the bot id in the manifest is the Entra AppId, not the Bot Service resource name.
+
+Upload the app package (manifest + icons) through the Teams Admin Center for org-wide deployment. In DoD tenants, side-loading may be disabled by policy; the recommended path is publishing through Teams Admin Center with an approved appId.

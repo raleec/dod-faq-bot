@@ -1,0 +1,5 @@
+Title: Response Caching Layers
+
+Two cache layers are common in production RAG systems. L1 is an in-process semantic cache (near-exact match on normalized query) kept in the orchestrator's memory or in Redis. L2 is a vector-based similarity cache: store past (query, answer) pairs as vectors and reuse the answer when a new query's embedding is within a similarity threshold (e.g., cosine > 0.92) of a cached query.
+
+L1 catches exact re-asks, L2 catches paraphrased re-asks. Both dramatically cut AOAI token spend on high-frequency FAQ traffic while preserving freshness through a TTL.

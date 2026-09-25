@@ -1,0 +1,5 @@
+Title: Pilot Teardown Checklist
+
+At the end of a pilot, delete: the resource group (removes all contained resources), the bot Microsoft Entra app registration (does not live in the RG), any soft-deleted Key Vaults (purge to release the name), and any soft-deleted Cognitive Services accounts (purge to release the name and free the subscription-level quota for that model).
+
+Also review: role assignments (do the identities still need access to anything else?), custom Entra app consents, DNS records, budget alerts, and diagnostic settings pointing to a Log Analytics workspace outside the pilot RG. Document the teardown timestamp and the final cost in the pilot closeout report.

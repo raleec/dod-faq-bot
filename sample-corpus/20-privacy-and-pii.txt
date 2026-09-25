@@ -1,0 +1,5 @@
+Title: Privacy and PII Handling
+
+Do not log full user messages or LLM responses without a redaction pass. Use Azure AI Language PII detection or a regex+ML combo to redact SSNs, DoD IDs, CAC numbers, phone numbers, and email addresses from telemetry.
+
+For DoD, avoid capturing user identity beyond what the ATO requires. Session correlation IDs are typically sufficient. If you must store conversation transcripts, encrypt at rest with a customer-managed key (CMK) in Key Vault and enforce a retention policy.

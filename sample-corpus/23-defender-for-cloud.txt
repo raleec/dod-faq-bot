@@ -1,0 +1,5 @@
+Title: Defender for Cloud Baseline
+
+Microsoft Defender for Cloud provides secure score, regulatory compliance dashboards (FedRAMP, NIST 800-53, CMMC L2, DoD IL4/IL5), and workload protection plans for AI services, App Service, Key Vault, and Storage.
+
+Enable Defender for AI services once AOAI is deployed. It surfaces prompt-injection attempts, jailbreak patterns, and abnormal token consumption. Configure alerts to the SOC's SIEM (Sentinel or Splunk) via a Log Analytics workspace export.

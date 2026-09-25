@@ -1,0 +1,5 @@
+Title: Using SharePoint as a RAG Corpus
+
+SharePoint document libraries are a common corpus source for federal customers because they already hold ATO'd content and inherit existing access controls. Azure AI Search has a SharePoint Online indexer that supports incremental refresh.
+
+Caveats: the SP indexer requires a Microsoft Entra app registration with Sites.Read.All (delegated or application), the indexer runs on Search-managed identity or an app-only Graph token, and DoD-region SP tenants (M365 GCC-High / DoD) require the Gov/DoD variant of the connector. Document-level ACL trimming is available but requires additional configuration.

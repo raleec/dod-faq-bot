@@ -1,0 +1,5 @@
+Title: Monitoring and Observability
+
+Instrument every RAG hop with Application Insights: query received, cache hit/miss (L1, L2), retrieval latency, top-k chunk IDs and scores, LLM latency and token counts, final answer length, user feedback signal.
+
+Track per-tenant metrics if the bot serves multiple orgs. Add a weekly Kusto (KQL) report of top questions, top low-confidence queries, and cache hit rate. Low-confidence queries are the pipeline into the escalation queue.

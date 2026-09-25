@@ -1,0 +1,5 @@
+Title: Vector Search Tuning in Azure AI Search
+
+Azure AI Search vector fields default to HNSW with cosine similarity. Common tuning knobs are m (default 4), efConstruction (default 400), and efSearch (default 500). For most FAQ / documentation corpora with < 100k chunks, defaults are fine.
+
+For hybrid search, populate both the search parameter (BM25 keyword) and the vectorQueries parameter. Use semanticConfiguration for reranking when quality matters more than latency. Semantic ranking is a per-query billed feature; check current pricing before enabling globally.
