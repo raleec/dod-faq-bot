@@ -22,8 +22,8 @@ param(
     [int]   $TopK             = 3,
     [switch]$Hybrid,
     [switch]$SkipCache,
-    [int]   $CacheTtlHours    = 24,
-    [double]$L2Threshold      = 0.92,
+    [int]   $CacheTtlHours    = 336,   # 14 days
+    [double]$L2Threshold      = 0.85,
     [string]$PromptVersion    = 'v1',
     [string]$ApiVersion       = '2024-08-01-preview',
     [string]$SearchApiVer     = '2024-07-01'

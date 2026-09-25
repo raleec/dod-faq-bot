@@ -27,7 +27,7 @@ API_VERSION     = os.environ.get("AOAI_API_VERSION",   "2024-08-01-preview")
 SEARCH_API_VER  = os.environ.get("SEARCH_API_VERSION", "2024-07-01")
 
 # Cache tuning
-CACHE_TTL_HOURS = int(os.environ.get("CACHE_TTL_HOURS", "24"))
+CACHE_TTL_HOURS = int(os.environ.get("CACHE_TTL_HOURS", "336"))  # 14 days
 L2_THRESHOLD    = float(os.environ.get("L2_THRESHOLD", "0.85"))
 PROMPT_VERSION  = os.environ.get("PROMPT_VERSION", "v1")
 TOP_K           = int(os.environ.get("TOP_K", "3"))

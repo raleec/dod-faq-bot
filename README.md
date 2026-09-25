@@ -119,7 +119,7 @@ the AI Search Basic instance.
 | `sensitivityLabel` | e.g. `unclassified`, `cui` — used to gate cache reuse in mixed-audience deployments |
 | `hitCount` | Incremented on every hit (informs cache eviction / warmup analytics) |
 | `createdAt` | UTC timestamp |
-| `expiresAt` | UTC timestamp — filtered on every lookup (default TTL 24 h, override via `CACHE_TTL_HOURS`) |
+| `expiresAt` | UTC timestamp — filtered on every lookup (default TTL **336 h / 14 days**, override via `CACHE_TTL_HOURS`) |
 
 Both L1 and L2 lookups also filter on `promptVersion` + `modelVersion` + `expiresAt`
 so **a prompt tweak or model rev automatically invalidates prior entries** — no
@@ -151,7 +151,7 @@ invert that back to raw cosine before applying the threshold.
 |---|---|---|---|
 | `-SkipCache` / `SKIP_CACHE=1` | CLI / env | off | Bypass both L1 and L2; always call the LLM |
 | `-L2Threshold 0.85` / `L2_THRESHOLD` | CLI / env | `0.85` | Cosine cutoff for L2 hit |
-| `-CacheTtlHours 24` / `CACHE_TTL_HOURS` | CLI / env | `24` | How long an entry stays hit-eligible |
+| `-CacheTtlHours 336` / `CACHE_TTL_HOURS` | CLI / env | `336` (14 days) | How long an entry stays hit-eligible |
 | `-PromptVersion v2` / `PROMPT_VERSION` | CLI / env | `v1` | Bump to invalidate all cached entries answered under the old prompt |
 | `SENSITIVITY_LABEL` | env | `unclassified` | Stamped on writes; gate reads by policy |
 | `SOURCE_DOCS_VERSION` | env | `seed-2026-07-27` | Bump on reindex to force a rebuild |
@@ -169,6 +169,46 @@ invert that back to raw cosine before applying the threshold.
 At ~40 % combined hit rate (conservative estimate for a real FAQ workload), the
 cache pays for itself against the AI Search Basic tier within the first few
 thousand queries and turns median latency into a sub-second experience.
+
+### Long TTLs (weeks–months) — tradeoffs and mitigations
+
+FAQ answers change on the timescale of policy/product updates, not hours. The
+default TTL is therefore **14 days**, and there are cases (stable KB, semantic-
+search-replacement workload, small trusted user base) where **60–90 days** is
+reasonable. The tradeoffs shift as you extend TTL:
+
+| Risk | Grows with TTL? | Why | Mitigation |
+|---|---|---|---|
+| **Answer staleness** — cache returns policy/pricing/contact info that has since changed in the KB | **Yes, sharply** | Long TTL means most weight sits on `sourceDocsVersion` for invalidation | Bump `SOURCE_DOCS_VERSION` on **every material corpus change**; wire the ingest job to increment it automatically |
+| **Retrieval drift** — new/better chunks now exist in `faq-index` but the cache serves the old synthesis | Yes | Cache entry pins `retrievedChunkIds` at write time | Add "citation-integrity check": on cache read, verify all `retrievedChunkIds` still exist in `faq-index`; drop cache read if any are gone |
+| **Model regression** — AOAI ships a new `gpt-4o-YYYY-MM-DD` and the cached answer no longer matches a fresh call | Yes | `modelVersion` comes from the AOAI response header; auto-invalidates on rev, so this is mostly handled | Pin your deployment to a specific model rev (not "latest") so `modelVersion` is stable and you invalidate deliberately |
+| **Prompt/guardrail drift** — tightened safety filter, new PII rule, updated tone | Yes | Only fix is `PROMPT_VERSION` bump | Treat `PROMPT_VERSION` as a semver on the system prompt; bump on any material change |
+| **L2 false positives** — a 0.86-cosine paraphrase turns out to have subtly different intent | Yes | Larger cache = larger candidate set for near-matches | Raise `L2_THRESHOLD` as the cache grows (0.85 → 0.87 → 0.88); log cosine per hit and correlate with 👎 feedback |
+| **Cache poisoning** — a first-time wrong answer serves paraphrases for weeks | **Yes, sharply** | No automatic quality gate today | Wire 👎 / 🚩 signals from the adaptive card to a `negFeedbackCount` field; auto-evict on ≥ N thumbs-down or on any escalation triggered by a cache hit |
+| **Personalization leakage** — user A gets an answer that should have been personalized to their role/tenant | Yes | Cache key is question-only, not user-scoped | Either add `audienceKey` to the hash (destroys hit rate) or classify answers as "audience-agnostic" and only cache those. For the FAQ workload most items are shared-audience — the leak surface is small if you enforce `sensitivityLabel` |
+| **Regulatory / audit surface** — cached content inherits source doc sensitivity, must be purgeable | Yes | Long-lived derived data = longer retention obligation | Honor `sensitivityLabel` filter on reads; document that `az search index reset` on `faq-cache` is part of the DR / classified-doc-retract runbook |
+| **Storage cost** | ~none | Basic AI Search: $73/mo flat, 2 GB / ~130 k entries at ~15 KB/entry. At 500 unique Qs/day + 14-day TTL = ~7 k entries. Even at 90 days = ~45 k. Well inside Basic. | Move to Standard S1 (25 GB) only above ~130 k live entries |
+| **Cold-start bias** — early users' phrasing locks in for weeks | Yes | First writer wins on L2 | Seed the cache at deploy time with a curated FAQ list (one embedding per canonical question) |
+| **Thundering-herd on miss** — 100 users hit the same brand-new Q simultaneously, all miss, all call the LLM | Independent of TTL | Miss path has no in-flight de-dup today | Add per-replica in-flight lookup map keyed on question hash; first request goes to LLM, others await |
+
+### Recommended long-TTL configuration
+
+| Setting | Value | Reason |
+|---|---|---|
+| `CACHE_TTL_HOURS` | **`336` (14 d) → `2160` (90 d)** as confidence grows | Start at 14 d default; extend after 2 weeks of feedback data |
+| `L2_THRESHOLD` | `0.85` → `0.87` after ≥ 5 k cache entries | Compensate for growing near-neighbor set |
+| `SOURCE_DOCS_VERSION` bump | **Automated in ingest** (e.g. `seed-YYYY-MM-DD-hhmm` from `ingest-corpus.ps1`) | Removes the "did the operator remember to bump?" failure mode |
+| `PROMPT_VERSION` bump | Manual, versioned in Git | Prompt is source code, not data |
+| 👎 feedback wiring | **Required** at long TTL | Only automatic guard against a bad answer serving weeks of traffic |
+| Curated cache seed | On first deploy | Kills cold-start bias |
+| Citation-integrity check | Recommended | Cheap (one Search filter per hit); prevents retrieval-drift class of failures |
+| Escalation → cache eviction | Recommended | Any escalated answer's source cache entry gets deleted |
+
+For the "replacing a semantic-search-only system" scenario specifically: the
+prior system had **no invalidation at all** — you're already ahead of it as
+long as `SOURCE_DOCS_VERSION` bumps on reindex. The prompt/model-version
+filters are pure upside vs the legacy system, and 👎 wiring gives you a quality
+signal the old system never had.
 
 ---
 
