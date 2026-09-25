@@ -203,7 +203,7 @@ $indexBody = @{
     name = 'faq-cache'
     fields = @(
         @{ name='id';                type='Edm.String';         key=$true;  filterable=$true }
-        @{ name='cacheKeyHash';      type='Edm.String';         filterable=$true }               # L1 SHA-256 lookup
+        @{ name='cacheKeyHash';      type='Collection(Edm.String)'; filterable=$true }             # L1 SHA-256 lookup (list; L2 hits append their own hash)
         @{ name='question';          type='Edm.String';         searchable=$true }               # debug / audit
         @{ name='answer';            type='Edm.String';         retrievable=$true }
         @{ name='citations';         type='Collection(Edm.String)'; retrievable=$true }
@@ -235,10 +235,11 @@ Result: index `faq-cache` created — **14 fields, `faq-cache-hnsw` HNSW / cosin
 
 **Runtime behavior** (mirrored between `orchestrator/rag.py` and `deploy/rag-query.ps1`):
 
-1. **L1 lookup** — POST `docs/search` with `filter=cacheKeyHash eq '<sha>' and expiresAt gt <now> and promptVersion eq '<v>' and modelVersion eq '<m>'`. Sub-second, no embed cost. On hit: bump `hitCount` via `merge`, return the cached answer.
+1. **L1 lookup** — POST `docs/search` with `filter=cacheKeyHash/any(h: h eq '<sha>') and expiresAt gt <now> and promptVersion eq '<v>' and modelVersion eq '<m>'`. Sub-second, no embed cost. On hit: bump `hitCount` via `merge`, return the cached answer.
 2. **Miss → embed** the question with `text-embedding-3-large` (3072-d).
-3. **L2 lookup** — POST `docs/search` with a `vectorQueries` block against `questionEmbedding` (k=1) + the same filter as L1. Azure AI Search returns `@search.score = 1 / (2 - cosine)`; the code inverts back to raw cosine and compares to `L2_THRESHOLD` (default `0.85`). Empirically the useful range for `text-embedding-3-large` is `0.82–0.88`; the industry-default `0.92` almost never fires on this model.
-4. **Miss → RAG** — full retrieval on `faq-index` + chat completion, then **write the answer back** to `faq-cache` with a fresh `id`, `cacheKeyHash`, `questionEmbedding`, `createdAt`, and `expiresAt = now + CACHE_TTL_HOURS`.
+3. **L2 lookup** — POST `docs/search` with a `vectorQueries` block against `questionEmbedding` (k=1) + the same filter as L1 (minus the `cacheKeyHash` clause). Azure AI Search returns `@search.score = 1 / (2 - cosine)`; the code inverts back to raw cosine and compares to `L2_THRESHOLD` (default `0.85`). Empirically the useful range for `text-embedding-3-large` is `0.82–0.88`; the industry-default `0.92` almost never fires on this model.
+4. **L2 → L1 promotion** — on an L2 hit, the current question's SHA-256 is *appended* to the winning entry's `cacheKeyHash` collection (with a FIFO cap of `MAX_L1_ALIASES = 32`), and `hitCount` is bumped, in a single `merge` write. **The next time that exact same paraphrase is asked, it wins on L1 — no embed step, no vector search.** Over time the top-N canonical entries accumulate their most common alias phrasings and the hot path becomes an L1 filter with 1 round-trip to Search.
+5. **Miss → RAG** — full retrieval on `faq-index` + chat completion, then **write the answer back** to `faq-cache` with a fresh `id`, `cacheKeyHash=[<sha>]`, `questionEmbedding`, `createdAt`, and `expiresAt = now + CACHE_TTL_HOURS`.
 
 **Invalidation** is baked into the filter clause — no purge job needed:
 

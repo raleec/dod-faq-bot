@@ -62,8 +62,10 @@ function Get-Embedding {
 
 function Try-L1CacheHit {
     param([string]$Hash, [string]$ModelVer)
-    $filter = "cacheKeyHash eq '$Hash' and expiresAt gt $(([DateTimeOffset]::UtcNow).ToString('o')) and promptVersion eq '$PromptVersion' and modelVersion eq '$ModelVer'"
-    $body = @{ filter = $filter; top = 1; select = 'id,question,answer,citations,createdAt,hitCount' } | ConvertTo-Json -Compress
+    # cacheKeyHash is Collection(Edm.String) - filter with any() so promoted
+    # L2-alias hashes hit as well as the original writer's hash.
+    $filter = "cacheKeyHash/any(h: h eq '$Hash') and expiresAt gt $(([DateTimeOffset]::UtcNow).ToString('o')) and promptVersion eq '$PromptVersion' and modelVersion eq '$ModelVer'"
+    $body = @{ filter = $filter; top = 1; select = 'id,question,answer,citations,cacheKeyHash,createdAt,hitCount' } | ConvertTo-Json -Compress
     $r = Invoke-RestMethod -Method POST -Uri "$searchBase/indexes/$CacheIndex/docs/search?api-version=$SearchApiVer" -Headers $searchH -Body $body
     if ($r.value.Count -gt 0) { return $r.value[0] }
     return $null
@@ -76,7 +78,7 @@ function Try-L2CacheHit {
         vectorQueries = @(@{ kind='vector'; vector=$Vec; fields='questionEmbedding'; k=1 })
         top    = 1
         filter = $filter
-        select = 'id,question,answer,citations,createdAt,hitCount'
+        select = 'id,question,answer,citations,cacheKeyHash,createdAt,hitCount'
     } | ConvertTo-Json -Depth 10 -Compress
     $r = Invoke-RestMethod -Method POST -Uri "$searchBase/indexes/$CacheIndex/docs/search?api-version=$SearchApiVer" -Headers $searchH -Body $body
     if ($r.value.Count -gt 0) {
@@ -100,7 +102,7 @@ function Write-CacheEntry {
     $doc = [ordered]@{
         '@search.action'   = 'mergeOrUpload'
         id                 = [Guid]::NewGuid().ToString('N')
-        cacheKeyHash       = $Hash
+        cacheKeyHash       = @($Hash)          # Collection(Edm.String) - single alias at write time
         question           = $Question
         answer             = $Answer
         citations          = $Citations
@@ -119,10 +121,38 @@ function Write-CacheEntry {
 }
 
 function Bump-HitCount {
+    # L1-hit path: bump hitCount only. The winning hash is already in the entry.
     param([string]$Id, [int]$Current)
     $doc = [ordered]@{ '@search.action' = 'merge'; id = $Id; hitCount = ($Current + 1) }
     $body = @{ value = @($doc) } | ConvertTo-Json -Depth 5 -Compress
     Invoke-RestMethod -Method POST -Uri "$searchBase/indexes/$CacheIndex/docs/index?api-version=$SearchApiVer" -Headers $searchH -Body $body | Out-Null
+}
+
+function Promote-L2ToL1 {
+    # L2-hit path: append current question's hash into the winning entry so
+    # future exact-repeats of *this* phrasing become L1 hits. Also bumps
+    # hitCount in the same merge. Azure Search collections are replace-only
+    # on merge - so we read (already have $Hit) -> append (dedup, FIFO cap 32)
+    # -> write.
+    param([hashtable]$Hit, [string]$Hash)
+    $existing = @()
+    if ($Hit.cacheKeyHash) { $existing = @($Hit.cacheKeyHash) }
+    if ($existing -contains $Hash) {
+        # already promoted (race with another caller); just bump hitCount
+        Bump-HitCount -Id $Hit.id -Current $Hit.hitCount
+        return
+    }
+    $aliases = $existing + $Hash
+    if ($aliases.Count -gt 32) { $aliases = $aliases[-32..-1] }  # FIFO cap
+    $doc = [ordered]@{
+        '@search.action' = 'merge'
+        id               = $Hit.id
+        cacheKeyHash     = $aliases
+        hitCount         = ($Hit.hitCount + 1)
+    }
+    $body = @{ value = @($doc) } | ConvertTo-Json -Depth 5 -Compress
+    Invoke-RestMethod -Method POST -Uri "$searchBase/indexes/$CacheIndex/docs/index?api-version=$SearchApiVer" -Headers $searchH -Body $body | Out-Null
+    Write-Host ("  L2->L1 promoted (aliases now={0})" -f $aliases.Count) -ForegroundColor DarkGray
 }
 
 # ---------- Flow ----------
@@ -147,7 +177,11 @@ if (-not $SkipCache) {
 
 if ($cacheHit) {
     Write-Host "`n=== $cacheLayer cache HIT (id=$($cacheHit.id), hitCount was $($cacheHit.hitCount), score=$($cacheHit.'@search.score')) ===" -ForegroundColor Magenta
-    Bump-HitCount -Id $cacheHit.id -Current $cacheHit.hitCount
+    if ($cacheLayer -eq 'L2') {
+        Promote-L2ToL1 -Hit $cacheHit -Hash $hash
+    } else {
+        Bump-HitCount -Id $cacheHit.id -Current $cacheHit.hitCount
+    }
     Write-Host "`n=== Cached answer ===" -ForegroundColor Green
     Write-Host $cacheHit.answer
     Write-Host "`n(zero AOAI chat tokens billed on cache hit)" -ForegroundColor DarkGray

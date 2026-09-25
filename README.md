@@ -85,9 +85,9 @@ long tail of similar phrasings (which is exactly the FAQ-bot workload).
                                     ┌──────────┐   hit   ┌──────────────────┐
                                     │   L2     │────────▶│ return cached    │  ~600 ms
                                     │  vector  │ ≥ 0.85  │ answer, bump hit │  ~1k tokens
-                                    │  search  │ cosine  │                  │  (embed only)
-                                    └────┬─────┘         └──────────────────┘
-                                         │ miss
+                                    │  search  │ cosine  │ + PROMOTE hash   │  (embed only)
+                                    └────┬─────┘         │ into L1 aliases  │
+                                         │ miss          └──────────────────┘
                                          ▼
                                   ┌──────────────┐
                                   │  faq-index   │──▶ chat completion ──▶ answer
@@ -96,7 +96,12 @@ long tail of similar phrasings (which is exactly the FAQ-bot workload).
 ```
 
 Every miss writes back into the cache so the *next* similar question wins on
-L1 or L2.
+L1 or L2. **On an L2 hit, the current question's hash is promoted into the
+winning entry's L1 alias list** (FIFO-capped at `MAX_L1_ALIASES=32`) — so the
+*next* time that same paraphrase is asked, it wins on L1 (no embed step, no
+vector search). Over time, hot canonical answers accumulate their common
+paraphrasings and the fast path becomes broader without duplicating cached
+answers.
 
 ### `faq-cache` index schema (14 fields, HNSW cosine profile)
 
@@ -107,7 +112,7 @@ the AI Search Basic instance.
 | Field | Purpose |
 |---|---|
 | `id` | Random GUID (primary key) |
-| `cacheKeyHash` | SHA-256 of the normalized question — **L1 filter** |
+| `cacheKeyHash` | **List** of SHA-256 hashes for the normalized question and any promoted L2-alias paraphrases (FIFO cap `MAX_L1_ALIASES=32`) — **L1 filter** via `cacheKeyHash/any(h: h eq '<sha>')` |
 | `questionEmbedding` | 3072-d vector on `text-embedding-3-large` — **L2 vector field** (HNSW / cosine) |
 | `question` | Raw question text (for debugging / audit) |
 | `answer` | Cached LLM response |
@@ -155,6 +160,7 @@ invert that back to raw cosine before applying the threshold.
 | `-PromptVersion v2` / `PROMPT_VERSION` | CLI / env | `v1` | Bump to invalidate all cached entries answered under the old prompt |
 | `SENSITIVITY_LABEL` | env | `unclassified` | Stamped on writes; gate reads by policy |
 | `SOURCE_DOCS_VERSION` | env | `seed-2026-07-27` | Bump on reindex to force a rebuild |
+| `MAX_L1_ALIASES` | env | `32` | Cap on how many paraphrase hashes get promoted onto a single canonical cache entry (FIFO-evict oldest) |
 
 ### Pilot numbers (from `SMOKE-TEST.md` §7)
 

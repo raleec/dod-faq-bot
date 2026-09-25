@@ -30,6 +30,10 @@ SEARCH_API_VER  = os.environ.get("SEARCH_API_VERSION", "2024-07-01")
 CACHE_TTL_HOURS = int(os.environ.get("CACHE_TTL_HOURS", "336"))  # 14 days
 L2_THRESHOLD    = float(os.environ.get("L2_THRESHOLD", "0.85"))
 PROMPT_VERSION  = os.environ.get("PROMPT_VERSION", "v1")
+# Max number of L1 hash aliases per canonical cache entry. Once reached, older
+# aliases are FIFO-evicted; the canonical entry (with its answer + embedding)
+# is never removed by this cap.
+MAX_L1_ALIASES  = int(os.environ.get("MAX_L1_ALIASES", "32"))
 TOP_K           = int(os.environ.get("TOP_K", "3"))
 
 # Optional Search admin key fallback (when MI RBAC on Search is not yet propagated)
@@ -111,12 +115,14 @@ async def _embed(session: aiohttp.ClientSession, text: str) -> list[float]:
 
 async def _try_l1(session: aiohttp.ClientSession, q_hash: str) -> dict[str, Any] | None:
     now = datetime.now(timezone.utc).isoformat()
+    # cacheKeyHash is Collection(Edm.String) — filter with any(h: h eq '<sha>')
+    # so both the original writer's hash and any promoted L2-alias hashes hit.
     flt = (
-        f"cacheKeyHash eq '{q_hash}' and expiresAt gt {now} "
+        f"cacheKeyHash/any(h: h eq '{q_hash}') and expiresAt gt {now} "
         f"and promptVersion eq '{PROMPT_VERSION}' and modelVersion eq '{_model_ver()}'"
     )
     body = {"filter": flt, "top": 1,
-            "select": "id,question,answer,citations,createdAt,hitCount"}
+            "select": "id,question,answer,citations,cacheKeyHash,createdAt,hitCount"}
     h = await _search_headers()
     url = f"{SEARCH_ENDPOINT}/indexes/{CACHE_INDEX}/docs/search?api-version={SEARCH_API_VER}"
     async with session.post(url, headers=h, json=body) as r:
@@ -135,7 +141,7 @@ async def _try_l2(session: aiohttp.ClientSession, vec: list[float]) -> tuple[dic
         "vectorQueries": [{"kind": "vector", "vector": vec,
                            "fields": "questionEmbedding", "k": 1}],
         "top": 1, "filter": flt,
-        "select": "id,question,answer,citations,createdAt,hitCount",
+        "select": "id,question,answer,citations,cacheKeyHash,createdAt,hitCount",
     }
     h = await _search_headers()
     url = f"{SEARCH_ENDPOINT}/indexes/{CACHE_INDEX}/docs/search?api-version={SEARCH_API_VER}"
@@ -159,7 +165,7 @@ async def _write_cache(session: aiohttp.ClientSession, question: str, q_hash: st
     doc = {
         "@search.action": "mergeOrUpload",
         "id": uuid.uuid4().hex,
-        "cacheKeyHash": q_hash,
+        "cacheKeyHash": [q_hash],
         "question": question,
         "answer": answer,
         "citations": citations,
@@ -181,12 +187,47 @@ async def _write_cache(session: aiohttp.ClientSession, question: str, q_hash: st
 
 
 async def _bump_hit(session: aiohttp.ClientSession, doc_id: str, current: int) -> None:
+    """L1 hit path: bump hitCount only (the winning hash is already present)."""
     doc = {"@search.action": "merge", "id": doc_id, "hitCount": current + 1}
     h = await _search_headers()
     url = f"{SEARCH_ENDPOINT}/indexes/{CACHE_INDEX}/docs/index?api-version={SEARCH_API_VER}"
     async with session.post(url, headers=h, json={"value": [doc]}) as r:
         if r.status >= 400:
             log.warning("hit bump failed: %s %s", r.status, await r.text())
+
+
+async def _promote_to_l1(session: aiohttp.ClientSession, hit: dict[str, Any], new_hash: str) -> None:
+    """L2 hit path: append the current question's hash to the winning entry so
+    future asks of *this* exact phrasing become L1 hits (no embed step).
+    Also bumps hitCount in the same merge call.
+
+    Azure AI Search `merge` action REPLACES collection fields (no append
+    primitive), so we read → append (deduped, FIFO-capped) → write back."""
+    existing = list(hit.get("cacheKeyHash") or [])
+    if new_hash in existing:
+        # Race: another replica already promoted this hash. Nothing to do beyond hitCount.
+        await _bump_hit(session, hit["id"], hit.get("hitCount") or 0)
+        return
+
+    aliases = existing + [new_hash]
+    if len(aliases) > MAX_L1_ALIASES:
+        # FIFO evict oldest aliases; canonical answer + embedding stay put.
+        aliases = aliases[-MAX_L1_ALIASES:]
+
+    doc = {
+        "@search.action": "merge",
+        "id": hit["id"],
+        "cacheKeyHash": aliases,
+        "hitCount": (hit.get("hitCount") or 0) + 1,
+    }
+    h = await _search_headers()
+    url = f"{SEARCH_ENDPOINT}/indexes/{CACHE_INDEX}/docs/index?api-version={SEARCH_API_VER}"
+    async with session.post(url, headers=h, json={"value": [doc]}) as r:
+        if r.status >= 400:
+            log.warning("L2->L1 promotion failed: %s %s", r.status, await r.text())
+        else:
+            log.info("L2->L1 promoted new_hash=%s to cache_id=%s (aliases=%d)",
+                     new_hash[:12], hit["id"], len(aliases))
 
 
 async def _retrieve(session: aiohttp.ClientSession, vec: list[float], hybrid_text: str | None) -> list[dict[str, Any]]:
@@ -263,7 +304,7 @@ async def answer(question: str, hybrid: bool = False, skip_cache: bool = False) 
             l2, cos = await _try_l2(session, vec)
             l2_cosine = cos
             if l2:
-                await _bump_hit(session, l2["id"], l2.get("hitCount") or 0)
+                await _promote_to_l1(session, l2, q_hash)
                 return RagResult(
                     answer=l2["answer"],
                     citations=list(l2.get("citations") or []),
