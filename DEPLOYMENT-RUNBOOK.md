@@ -187,9 +187,11 @@ az deployment sub create --name "faqbot-pilot1-$stamp" `
 
 ## 9. Post-deploy configuration
 
-L2 semantic cache index created directly against the pilot's commercial
-endpoint (the `deploy/configure-cache-index.ps1` script hardcodes the DoD
-`*.search.azure.us` suffix so it wasn't reused as-is):
+### 9a. L2 semantic cache index
+
+The pilot deploys a **second AI Search index** on the same Basic service — no
+extra Azure resource, just data-plane config. Both the L1 (exact-hash) and L2
+(vector) cache lookups target this index.
 
 ```powershell
 $searchName = 'srch-faqbot-pilot1-pbkgn5co6zxwe'
@@ -197,15 +199,61 @@ $rg = 'rg-faqbot-pilot1-eastus2'
 $adminKey = az search admin-key show --service-name $searchName -g $rg --query primaryKey -o tsv
 $endpoint = "https://$searchName.search.windows.net"
 
-# Index body: 14 fields including 3072-d HNSW cosine vector on 'questionEmbedding'
-# See deploy/configure-cache-index.ps1 for the full body.
+$indexBody = @{
+    name = 'faq-cache'
+    fields = @(
+        @{ name='id';                type='Edm.String';         key=$true;  filterable=$true }
+        @{ name='cacheKeyHash';      type='Edm.String';         filterable=$true }               # L1 SHA-256 lookup
+        @{ name='question';          type='Edm.String';         searchable=$true }               # debug / audit
+        @{ name='answer';            type='Edm.String';         retrievable=$true }
+        @{ name='citations';         type='Collection(Edm.String)'; retrievable=$true }
+        @{ name='retrievedChunkIds'; type='Collection(Edm.String)'; retrievable=$true }
+        @{ name='sourceDocsVersion'; type='Edm.String';         filterable=$true }               # invalidate on reindex
+        @{ name='promptVersion';     type='Edm.String';         filterable=$true }               # invalidate on prompt rev
+        @{ name='modelVersion';      type='Edm.String';         filterable=$true }               # invalidate on model rev
+        @{ name='sensitivityLabel';  type='Edm.String';         filterable=$true }               # e.g. unclassified / cui
+        @{ name='hitCount';          type='Edm.Int32';          retrievable=$true }
+        @{ name='createdAt';         type='Edm.DateTimeOffset'; filterable=$true; sortable=$true }
+        @{ name='expiresAt';         type='Edm.DateTimeOffset'; filterable=$true }               # TTL enforcement
+        @{ name='questionEmbedding'; type='Collection(Edm.Single)';
+          dimensions=3072; vectorSearchProfile='faq-cache-hnsw' }                                # L2 vector field
+    )
+    vectorSearch = @{
+        algorithms = @(@{ name='hnsw-cosine'; kind='hnsw';
+                          hnswParameters=@{ metric='cosine'; m=4; efConstruction=400; efSearch=500 } })
+        profiles   = @(@{ name='faq-cache-hnsw'; algorithm='hnsw-cosine' })
+    }
+} | ConvertTo-Json -Depth 10
+
 Invoke-RestMethod -Method PUT `
   -Uri  "$endpoint/indexes/faq-cache?api-version=2024-07-01" `
   -Headers @{ 'api-key' = $adminKey; 'Content-Type' = 'application/json' } `
   -Body $indexBody
 ```
 
-Result: index `faq-cache` created — 14 fields, `faq-cache-hnsw` profile.
+Result: index `faq-cache` created — **14 fields, `faq-cache-hnsw` HNSW / cosine profile**.
+
+**Runtime behavior** (mirrored between `orchestrator/rag.py` and `deploy/rag-query.ps1`):
+
+1. **L1 lookup** — POST `docs/search` with `filter=cacheKeyHash eq '<sha>' and expiresAt gt <now> and promptVersion eq '<v>' and modelVersion eq '<m>'`. Sub-second, no embed cost. On hit: bump `hitCount` via `merge`, return the cached answer.
+2. **Miss → embed** the question with `text-embedding-3-large` (3072-d).
+3. **L2 lookup** — POST `docs/search` with a `vectorQueries` block against `questionEmbedding` (k=1) + the same filter as L1. Azure AI Search returns `@search.score = 1 / (2 - cosine)`; the code inverts back to raw cosine and compares to `L2_THRESHOLD` (default `0.85`). Empirically the useful range for `text-embedding-3-large` is `0.82–0.88`; the industry-default `0.92` almost never fires on this model.
+4. **Miss → RAG** — full retrieval on `faq-index` + chat completion, then **write the answer back** to `faq-cache` with a fresh `id`, `cacheKeyHash`, `questionEmbedding`, `createdAt`, and `expiresAt = now + CACHE_TTL_HOURS`.
+
+**Invalidation** is baked into the filter clause — no purge job needed:
+
+| Change | Bump | Effect |
+|---|---|---|
+| System prompt | `PROMPT_VERSION` env / `-PromptVersion` param | Prior entries become invisible to the filter and are eventually reaped by TTL |
+| Model swap | `modelVersion` (auto-derived from AOAI deployment) | Same |
+| Corpus reindex | `SOURCE_DOCS_VERSION` env | Same |
+| Emergency purge | Manual DELETE on `faq-cache` docs, or delete + recreate the index | Instant |
+
+The full standalone body lives in `deploy/configure-cache-index.ps1` — that
+script hardcodes the DoD `*.search.azure.us` suffix, so the block above is the
+commercial variant used for the pilot.
+
+### 9b. Escalation surface
 
 Escalation SharePoint list + Teams channel: **not run** for the pilot smoke
 test (Graph `Sites.Selected` + `ChannelMessage.Send.Group` admin consent

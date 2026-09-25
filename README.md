@@ -54,12 +54,128 @@ Full component diagram + deployment runbook in [`DEPLOYMENT-RUNBOOK.md`](./DEPLO
 
 ---
 
+## Response caching (L1 exact + L2 semantic)
+
+Two-tier cache in front of the LLM. **L1** is a SHA-256 lookup on the normalized
+question — instantly hits repeat asks. **L2** is a vector search over prior
+question embeddings — hits *paraphrases* of previously answered questions.
+Together they cut LLM spend + median latency dramatically on any topic with a
+long tail of similar phrasings (which is exactly the FAQ-bot workload).
+
+### Request flow
+
+```
+                 ┌─────────────────────┐
+ user question ─▶│ normalize + SHA-256 │──┐
+                 └─────────────────────┘  │
+                                          ▼
+                                    ┌──────────┐   hit   ┌──────────────────┐
+                                    │   L1     │────────▶│ return cached    │  ~120 ms
+                                    │  filter  │         │ answer, bump hit │  0 tokens
+                                    └────┬─────┘         └──────────────────┘
+                                         │ miss
+                                         ▼
+                              ┌────────────────────┐
+                              │ embed question via │
+                              │ text-embedding-3-  │
+                              │ large (3072-d)     │
+                              └──────────┬─────────┘
+                                         │
+                                         ▼
+                                    ┌──────────┐   hit   ┌──────────────────┐
+                                    │   L2     │────────▶│ return cached    │  ~600 ms
+                                    │  vector  │ ≥ 0.85  │ answer, bump hit │  ~1k tokens
+                                    │  search  │ cosine  │                  │  (embed only)
+                                    └────┬─────┘         └──────────────────┘
+                                         │ miss
+                                         ▼
+                                  ┌──────────────┐
+                                  │  faq-index   │──▶ chat completion ──▶ answer
+                                  │  retrieval   │                        + write cache
+                                  └──────────────┘   ~2–4 s, ~1k prompt + ~150 completion tokens
+```
+
+Every miss writes back into the cache so the *next* similar question wins on
+L1 or L2.
+
+### `faq-cache` index schema (14 fields, HNSW cosine profile)
+
+Both caches live in the **same Azure AI Search index** (`faq-cache`, sibling to
+`faq-index`). No additional Azure resources — the vector search piggybacks on
+the AI Search Basic instance.
+
+| Field | Purpose |
+|---|---|
+| `id` | Random GUID (primary key) |
+| `cacheKeyHash` | SHA-256 of the normalized question — **L1 filter** |
+| `questionEmbedding` | 3072-d vector on `text-embedding-3-large` — **L2 vector field** (HNSW / cosine) |
+| `question` | Raw question text (for debugging / audit) |
+| `answer` | Cached LLM response |
+| `citations` | Source doc filenames returned |
+| `retrievedChunkIds` | Chunks that produced the original answer |
+| `sourceDocsVersion` | Corpus version tag — bump to force full cache miss on reindex |
+| `promptVersion` | System-prompt version — bump when you change the prompt |
+| `modelVersion` | e.g. `gpt-4o-2024-11-20` — bump when you rev the model |
+| `sensitivityLabel` | e.g. `unclassified`, `cui` — used to gate cache reuse in mixed-audience deployments |
+| `hitCount` | Incremented on every hit (informs cache eviction / warmup analytics) |
+| `createdAt` | UTC timestamp |
+| `expiresAt` | UTC timestamp — filtered on every lookup (default TTL 24 h, override via `CACHE_TTL_HOURS`) |
+
+Both L1 and L2 lookups also filter on `promptVersion` + `modelVersion` + `expiresAt`
+so **a prompt tweak or model rev automatically invalidates prior entries** — no
+manual purge, no stale answers.
+
+### L2 tuning — `text-embedding-3-large` cosine is compressed
+
+The industry-default L2 threshold of `0.92` **almost never fires** on this
+embedding model. Empirically-observed ranges from the pilot (`text-embedding-3-large`):
+
+| Question pair | Observed cosine |
+|---|---|
+| Identical text | 1.00 |
+| Close paraphrase (same intent, ≈70 % overlap) | 0.95–0.98 |
+| Same topic, different framing | 0.82–0.88 |
+| Related but different question | 0.65–0.75 |
+| Unrelated | 0.45–0.60 |
+
+**Default threshold is `0.85`.** Ratchet down to widen recall (more cache reuse,
+some risk of false-positives on nuance); ratchet up to tighten precision.
+Adjust via `L2_THRESHOLD` env var (orchestrator) or `-L2Threshold` (PowerShell
+CLI). Azure AI Search returns cosine as `@search.score = 1 / (2 - cosine)`;
+both the Python (`rag.py`) and PowerShell (`rag-query.ps1`) implementations
+invert that back to raw cosine before applying the threshold.
+
+### Overriding behavior
+
+| Knob | Where | Default | Effect |
+|---|---|---|---|
+| `-SkipCache` / `SKIP_CACHE=1` | CLI / env | off | Bypass both L1 and L2; always call the LLM |
+| `-L2Threshold 0.85` / `L2_THRESHOLD` | CLI / env | `0.85` | Cosine cutoff for L2 hit |
+| `-CacheTtlHours 24` / `CACHE_TTL_HOURS` | CLI / env | `24` | How long an entry stays hit-eligible |
+| `-PromptVersion v2` / `PROMPT_VERSION` | CLI / env | `v1` | Bump to invalidate all cached entries answered under the old prompt |
+| `SENSITIVITY_LABEL` | env | `unclassified` | Stamped on writes; gate reads by policy |
+| `SOURCE_DOCS_VERSION` | env | `seed-2026-07-27` | Bump on reindex to force a rebuild |
+
+### Pilot numbers (from `SMOKE-TEST.md` §7)
+
+| Metric | Miss | L1 hit | L2 hit |
+|---|---|---|---|
+| Latency | 2 900 ms | **121 ms** | ~600 ms |
+| Chat tokens | 712 prompt + 169 completion | **0** | 0 |
+| Embed tokens | ~50 | 0 | ~50 |
+| Search reads | 1 vector + 1 chat + 1 cache write | 1 filter + 1 merge | 1 vector + 1 merge |
+| Approx. cost/query (gpt-4o + embed) | ~$0.006 | **~$0.00003** | ~$0.00004 |
+
+At ~40 % combined hit rate (conservative estimate for a real FAQ workload), the
+cache pays for itself against the AI Search Basic tier within the first few
+thousand queries and turns median latency into a sub-second experience.
+
+---
+
 ## Key design decisions
 
 1. **AAD everywhere, not keys.** AOAI + Search both use managed-identity access from the Container App. `disableLocalAuth=true` on AOAI is enforced by policy.
-2. **Two-tier answer cache.**
-   - **L1** = SHA-256 hash of the normalized question → sub-second exact-match hit (~120 ms E2E, 0 tokens).
-   - **L2** = cosine-similarity vector search on question embeddings (default threshold `0.85` — tuned for `text-embedding-3-large`'s compressed cosine range).
+2. **Two-tier answer cache** — see the [Response caching](#response-caching-l1-exact--l2-semantic) section above.
 3. **Container Apps over VM/AKS** for the pilot — cheap idle floor, scales to zero-ish, single-command deploy, MI-native.
 4. **Escalation as a sink, not a workflow.** The bot logs an `ESCALATION` warning to LAW (queryable by the triage team). A webhook stub is included for integration with ServiceNow / Teams channel / whatever.
 5. **Costs modeled at ~$2,500/month** for fairly high usage: gpt-4o pay-as-you-go dominates; AI Search Basic + Container Apps + Bot Standard are ~$300/mo combined. Idle floor is ~$180/mo (Search + LAW retention + KV + ACR).
