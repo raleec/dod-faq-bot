@@ -1,8 +1,8 @@
 # =============================================================================
-#  Provisions the escalation surface for the DoD FAQ Bot.
+#  Provisions the escalation surface for the CACHEBOT.
 #  - Creates a SharePoint list "FAQ Escalations" on the target site
 #  - Prints the site + list IDs needed to configure Sites.Selected on the bot
-#  - Optionally creates the "FAQ Bot - Triage" private Teams channel
+#  - Optionally creates the "CACHEBOT - Triage" private Teams channel
 #
 #  Prereqs
 #    - PowerShell 7+
@@ -19,7 +19,7 @@ param(
     [Parameter(Mandatory)] [string] $BotAppId,               # bot's Entra app registration (client) id
     [string] $ListName = 'FAQ Escalations',
     [string] $TriageTeamId,                                  # AAD group id of the Team hosting the triage channel
-    [string] $TriageChannelName = 'FAQ Bot - Triage',
+    [string] $TriageChannelName = 'CACHEBOT - Triage',
     [switch] $CreateTriageChannel,
     [switch] $GrantSitesSelected
 )
@@ -53,7 +53,7 @@ if ($existing.value.Count -gt 0) {
     Write-Host "==> Creating list '$ListName'..." -ForegroundColor Cyan
     $listBody = @{
         displayName = $ListName
-        description = 'Escalations from the DoD FAQ Bot. One row per user report of a wrong or unanswered question.'
+        description = 'Escalations from the CACHEBOT. One row per user report of a wrong or unanswered question.'
         list        = @{ template = 'genericList' }
         columns     = @(
             @{ name = 'UserUpn';         text          = @{} }
@@ -87,7 +87,7 @@ if ($CreateTriageChannel) {
     if ($existingCh.value.Count -gt 0) {
         Write-Host "    channel already exists (id: $($existingCh.value[0].id))" -ForegroundColor Yellow
     } else {
-        $chBody = @{ displayName = $TriageChannelName; membershipType = 'private'; description = 'Escalations from the DoD FAQ Bot.' } | ConvertTo-Json
+        $chBody = @{ displayName = $TriageChannelName; membershipType = 'private'; description = 'Escalations from the CACHEBOT.' } | ConvertTo-Json
         $ch = Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.us/v1.0/teams/$TriageTeamId/channels" -Body $chBody -ContentType 'application/json'
         Write-Host "    channel id: $($ch.id)" -ForegroundColor Green
     }
@@ -99,7 +99,7 @@ if ($GrantSitesSelected) {
     $permBody = @{
         roles = @('write')
         grantedToIdentities = @(
-            @{ application = @{ id = $BotAppId; displayName = 'DoD FAQ Bot' } }
+            @{ application = @{ id = $BotAppId; displayName = 'CACHEBOT' } }
         )
     } | ConvertTo-Json -Depth 5
     Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.us/v1.0/sites/$($site.id)/permissions" -Body $permBody -ContentType 'application/json' | Out-Null

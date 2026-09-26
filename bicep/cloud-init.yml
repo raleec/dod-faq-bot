@@ -32,13 +32,13 @@ runcmd:
   # and start the orchestrator container. Replace ACR + image after build.
   #
   # ACR_LOGIN_SERVER=<yourregistry>.azurecr.us
-  # IMAGE=$ACR_LOGIN_SERVER/faq-orchestrator:latest
+  # IMAGE=$ACR_LOGIN_SERVER/cachebot-orchestrator:latest
   #
   # az login --identity
   # az acr login --name <yourregistry>
   # docker run -d --restart=always -p 443:8443 \
   #     -e AOAI_ENDPOINT="https://<aoai>.openai.azure.us/" \
   #     -e SEARCH_ENDPOINT="https://<search>.search.azure.us" \
-  #     -e SEARCH_INDEX="faq-index" \
+  #     -e SEARCH_INDEX="cachebot-index" \
   #     -e KEY_VAULT_URI="https://<kv>.vault.usgovcloudapi.net/" \
   #     --name orchestrator $IMAGE

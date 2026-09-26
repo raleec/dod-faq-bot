@@ -1,4 +1,4 @@
-# Azure OpenAI (Gov) Quota Request — DoD FAQ Bot
+# Azure OpenAI (Gov) Quota Request — CACHEBOT
 
 Use this content when submitting the **Azure OpenAI Service Request Form** for
 Azure Government / DoD. The current intake is at:

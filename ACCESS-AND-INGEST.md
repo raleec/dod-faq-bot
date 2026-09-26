@@ -1,4 +1,4 @@
-# FAQ Bot Pilot — Access & Corpus Feed Guide
+# CACHEBOT Pilot — Access & Corpus Feed Guide
 
 **Deployment**: commercial-cloud pilot in sub `MngEnvMCAP217858`, RG `rg-faqbot-pilot1-eastus2`
 **Purpose**: proves the RAG pipeline end-to-end. DoD prod deploy will reuse this pattern in a Gov region.
@@ -15,7 +15,7 @@
 | Bot channel | `bot-faqbot-pilot1` (App Registration `<bot-msa-app-id>`) | Bot Framework Emulator, Teams (post-manifest) |
 | Compute (future orchestrator) | `vm-faqbot-pilot1` (D2s_v7, private only) | Bastion or Run-Command |
 | Secrets | `kv-faqbot-pilot1-pbkgn5co6zxwe` | Portal, `az keyvault` |
-| Indexes | `faq-index` (primary, 25 docs) · `faq-cache` (L2 semantic cache, empty) | Search REST |
+| Indexes | `cachebot-index` (primary, 25 docs) · `cachebot-cache` (L2 semantic cache, empty) | Search REST |
 
 There is no orchestrator app yet — the retrieval + LLM loop is proven via `deploy\rag-query.ps1`. The next phase (customer DoD deploy) drops this loop into the App Service or Function.
 
@@ -25,7 +25,7 @@ There is no orchestrator app yet — the retrieval + LLM loop is proven via `dep
 
 ### 2a. Query the RAG loop from your desktop
 ```powershell
-cd 'C:\Users\raleecook\OneDrive - Microsoft\Documents\Microsoft Scout\dod-faq-bot'
+cd 'C:\Users\raleecook\OneDrive - Microsoft\Documents\Microsoft Scout\cachebot'
 .\deploy\rag-query.ps1 -Question "How do IL4 and IL5 differ?"
 
 # Hybrid (BM25 + vector) — better for keyword-heavy questions:
@@ -49,7 +49,7 @@ cd 'C:\Users\raleecook\OneDrive - Microsoft\Documents\Microsoft Scout\dod-faq-bo
 
 ### 2b. Try it in the AOAI Foundry playground
 - Portal → `aoai-faqbot-pilot1-pbkgn5co6zxwe` → **Go to Azure AI Foundry portal**
-- Chat playground → **Add your data** → **Azure AI Search** → pick `faq-index`, field `content`, vector field `contentVector`, embedding `text-embedding-3-large`.
+- Chat playground → **Add your data** → **Azure AI Search** → pick `cachebot-index`, field `content`, vector field `contentVector`, embedding `text-embedding-3-large`.
 - No code — good for showing the customer the pattern in ~5 minutes.
 
 ### 2c. Bot Framework Emulator (channel test)
@@ -72,19 +72,19 @@ Two supported patterns today: **push** (recommended for pilot) and **SharePoint 
 - `.pdf` — [PdfPig](https://www.nuget.org/packages/PdfPig) 0.1.9, downloaded on first run into `deploy\lib\` (~7 MB)
 
 **Steps**:
-1. Drop files into `dod-faq-bot\sample-corpus\` (or point `-CorpusPath` at your own folder).
+1. Drop files into `cachebot\sample-corpus\` (or point `-CorpusPath` at your own folder).
 2. Run:
    ```powershell
    .\deploy\ingest-corpus.ps1 -CorpusPath 'C:\path\to\your\docs'
    ```
-3. The script chunks (~2000 chars, 200 overlap), embeds via AOAI, and `mergeOrUpload`s into `faq-index`. Re-runs are idempotent — same source file + same chunk index = same doc ID.
+3. The script chunks (~2000 chars, 200 overlap), embeds via AOAI, and `mergeOrUpload`s into `cachebot-index`. Re-runs are idempotent — same source file + same chunk index = same doc ID.
 
 **To reset the index** (nuke and re-seed):
 ```powershell
 $sk = az search admin-key show --service-name srch-faqbot-pilot1-pbkgn5co6zxwe -g rg-faqbot-pilot1-eastus2 --query primaryKey -o tsv
-Invoke-RestMethod -Method POST -Uri "https://srch-faqbot-pilot1-pbkgn5co6zxwe.search.windows.net/indexes/faq-index/docs/index?api-version=2024-07-01" `
+Invoke-RestMethod -Method POST -Uri "https://srch-faqbot-pilot1-pbkgn5co6zxwe.search.windows.net/indexes/cachebot-index/docs/index?api-version=2024-07-01" `
     -Headers @{ 'api-key' = $sk; 'Content-Type' = 'application/json' } `
-    -Body (@{ value = @( (Invoke-RestMethod -Uri "https://srch-faqbot-pilot1-pbkgn5co6zxwe.search.windows.net/indexes/faq-index/docs?api-version=2024-07-01&`$select=id&`$top=1000" -Headers @{'api-key'=$sk}).value | ForEach-Object { @{ '@search.action' = 'delete'; id = $_.id } }) } | ConvertTo-Json -Depth 10)
+    -Body (@{ value = @( (Invoke-RestMethod -Uri "https://srch-faqbot-pilot1-pbkgn5co6zxwe.search.windows.net/indexes/cachebot-index/docs?api-version=2024-07-01&`$select=id&`$top=1000" -Headers @{'api-key'=$sk}).value | ForEach-Object { @{ '@search.action' = 'delete'; id = $_.id } }) } | ConvertTo-Json -Depth 10)
 ```
 
 **Non-text formats (.docx, .pdf, .pptx)**: add a parser step. Simplest: install `pandoc` or use `Word.Application` COM to save-as .txt; drop into `sample-corpus`; re-run ingest. Not automated in the pilot script — the customer's DoD build will use Search built-in cracking (below).
@@ -94,7 +94,7 @@ Invoke-RestMethod -Method POST -Uri "https://srch-faqbot-pilot1-pbkgn5co6zxwe.se
 The customer wants a SharePoint list as the corpus. In production this becomes:
 
 ```
-SharePoint doc library ─► AI Search SP indexer ─► #Microsoft.Skills.Text.AzureOpenAIEmbeddingSkill ─► faq-index
+SharePoint doc library ─► AI Search SP indexer ─► #Microsoft.Skills.Text.AzureOpenAIEmbeddingSkill ─► cachebot-index
                                                         │
                                                         └► calls AOAI text-embedding-3-large
 ```
@@ -142,9 +142,9 @@ az role assignment create --assignee $oid --role "Cognitive Services OpenAI User
 $sk = az search admin-key show --service-name srch-faqbot-pilot1-pbkgn5co6zxwe -g rg-faqbot-pilot1-eastus2 --query primaryKey -o tsv
 $h = @{ 'api-key' = $sk }
 # Count
-Invoke-RestMethod -Uri "https://srch-faqbot-pilot1-pbkgn5co6zxwe.search.windows.net/indexes/faq-index/docs/`$count?api-version=2024-07-01" -Headers $h
+Invoke-RestMethod -Uri "https://srch-faqbot-pilot1-pbkgn5co6zxwe.search.windows.net/indexes/cachebot-index/docs/`$count?api-version=2024-07-01" -Headers $h
 # List titles + sources
-(Invoke-RestMethod -Uri "https://srch-faqbot-pilot1-pbkgn5co6zxwe.search.windows.net/indexes/faq-index/docs?api-version=2024-07-01&`$select=id,title,source&`$top=100" -Headers $h).value | Format-Table
+(Invoke-RestMethod -Uri "https://srch-faqbot-pilot1-pbkgn5co6zxwe.search.windows.net/indexes/cachebot-index/docs?api-version=2024-07-01&`$select=id,title,source&`$top=100" -Headers $h).value | Format-Table
 ```
 
 ---

@@ -1,6 +1,6 @@
-# dod-faq-bot\deploy\ingest-corpus.ps1
+# cachebot\deploy\ingest-corpus.ps1
 #
-# Crack .txt / .md / .docx / .pdf under a corpus folder, chunk, embed, and push to faq-index.
+# Crack .txt / .md / .docx / .pdf under a corpus folder, chunk, embed, and push to cachebot-index.
 #
 # Cracker backends:
 #   - .txt  / .md         : direct file read
@@ -16,7 +16,7 @@ param(
     [string]$AoaiEndpoint  = 'https://aoai-faqbot-pilot1-pbkgn5co6zxwe.openai.azure.com',
     [string]$EmbedDeploy   = 'text-embedding-3-large',
     [string]$SearchService = 'srch-faqbot-pilot1-pbkgn5co6zxwe',
-    [string]$IndexName     = 'faq-index',
+    [string]$IndexName     = 'cachebot-index',
     [string]$CorpusPath    = (Join-Path $PSScriptRoot '..\sample-corpus'),
     [int]   $ChunkChars    = 2000,
     [int]   $OverlapChars  = 200,

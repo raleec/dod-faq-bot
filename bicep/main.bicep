@@ -1,5 +1,5 @@
 // =========================================================================
-//  DoD FAQ Bot - Root Bicep
+//  CACHEBOT - Root Bicep
 //  Target: Azure Government (usgovvirginia / usgovarizona) - IL5 eligible
 //  Deploys: vNet + PE, Key Vault, AOAI, AI Search, VM (orchestrator),
 //           Azure Bot Service, Log Analytics + App Insights

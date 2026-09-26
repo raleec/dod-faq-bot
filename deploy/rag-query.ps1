@@ -1,10 +1,10 @@
-# dod-faq-bot\deploy\rag-query.ps1
+# cachebot\deploy\rag-query.ps1
 # End-to-end RAG loop with two-layer cache.
 #
 # Flow:
-#   1. L1 lookup: SHA256 of the normalized question against faq-cache.cacheKeyHash (filter, no embed).
-#   2. On L1 miss: embed the question ONCE, then L2 semantic lookup against faq-cache.questionEmbedding (top-1 vector search, cosine >= threshold).
-#   3. On L1+L2 miss: vector search faq-index -> gpt-4o with cited context -> answer -> write cache entry.
+#   1. L1 lookup: SHA256 of the normalized question against cachebot-cache.cacheKeyHash (filter, no embed).
+#   2. On L1 miss: embed the question ONCE, then L2 semantic lookup against cachebot-cache.questionEmbedding (top-1 vector search, cosine >= threshold).
+#   3. On L1+L2 miss: vector search cachebot-index -> gpt-4o with cited context -> answer -> write cache entry.
 #
 # Cache entries also validate promptVersion + modelVersion + expiresAt so we can safely change the system prompt or model
 # without serving stale answers.
@@ -17,8 +17,8 @@ param(
     [string]$EmbedDeploy      = 'text-embedding-3-large',
     [string]$ChatDeploy       = 'gpt-4o',
     [string]$SearchService    = 'srch-faqbot-pilot1-pbkgn5co6zxwe',
-    [string]$IndexName        = 'faq-index',
-    [string]$CacheIndex       = 'faq-cache',
+    [string]$IndexName        = 'cachebot-index',
+    [string]$CacheIndex       = 'cachebot-cache',
     [int]   $TopK             = 3,
     [switch]$Hybrid,
     [switch]$SkipCache,

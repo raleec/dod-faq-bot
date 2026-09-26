@@ -5,7 +5,7 @@
 #    1. Delete resource group (all resources, incl. soft-delete-eligible ones).
 #       Resources currently in the RG (post 2026-09-22 build-out):
 #         - AOAI account + PE + gpt-4o + text-embedding-3-large deployments
-#         - AI Search svc (faq-index + faq-cache indexes)
+#         - AI Search svc (cachebot-index + cachebot-cache indexes)
 #         - Storage account, Key Vault (+ PE), Log Analytics + App Insights, vNet
 #         - Bot Service resource + channels (Teams, Direct Line)
 #         - VM (management jumpbox), MI, disk, NIC
@@ -30,7 +30,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-Write-Host "=== DoD FAQ Bot pilot teardown ===" -ForegroundColor Cyan
+Write-Host "=== CACHEBOT pilot teardown ===" -ForegroundColor Cyan
 Write-Host "  ResourceGroup: $ResourceGroup"
 Write-Host "  Location:      $Location"
 Write-Host "  Bot AppId:     $BotAppId"

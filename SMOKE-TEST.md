@@ -1,4 +1,4 @@
-# Smoke Test Results — DoD FAQ Bot Pilot
+# Smoke Test Results — CACHEBOT Pilot
 
 **Executed:** 2026-09-21 · **Deployment:** `faqbot-pilot1-20260921-115418`
 **Result:** ✅ **24 / 24 passed**
@@ -19,7 +19,7 @@
 | 10 | Private endpoints | AOAI PE Succeeded | ✅ |
 | 11 | | KV PE Succeeded | ✅ |
 | 12 | AI Search | `/servicestats` reachable | ✅ |
-| 13 | | `faq-cache` index exists (14 fields, 3072-d HNSW cosine) | ✅ |
+| 13 | | `cachebot-cache` index exists (14 fields, 3072-d HNSW cosine) | ✅ |
 | 14 | VM | Provisioning Succeeded | ✅ |
 | 15 | | System-assigned managed identity | ✅ |
 | 16 | | PowerState = running | ✅ |
@@ -69,7 +69,7 @@ Path A executed: local push → AOAI embed → Search index → RAG chat complet
 - 25 seed docs in `sample-corpus\*.txt` (federal / Azure Gov / RAG themed)
 - Chunked at ~2000 chars, 200-char overlap (all docs fit in a single chunk here)
 - Embedded with `text-embedding-3-large` (3072-d)
-- Uploaded to `faq-index` via `deploy\ingest-corpus.ps1`
+- Uploaded to `cachebot-index` via `deploy\ingest-corpus.ps1`
 - Confirmed doc count: **25 / 25**
 
 ## RAG query results
@@ -81,7 +81,7 @@ Path A executed: local push → AOAI embed → Search index → RAG chat complet
 | R3 | "What happens when the bot can't answer and how do users escalate?" | vector | `14-escalation-workflow.txt` (score 0.742) | ✅ Full flag → Function → SharePoint/Teams flow | 561 / 148 |
 | R4 | "What's the current price of Bitcoin?" (negative) | vector | (top-3 all unrelated) | ✅ Correctly refuses + suggests escalation | 543 / 35 |
 
-Cache index (`faq-cache`) is deployed but not yet wired — will populate once the orchestrator is running.
+Cache index (`cachebot-cache`) is deployed but not yet wired — will populate once the orchestrator is running.
 
 ## Non-obvious findings during ingest
 
@@ -91,7 +91,7 @@ Cache index (`faq-cache`) is deployed but not yet wired — will populate once t
 
 ## 7. Cache validation — 2026-07-27 afternoon
 
-L1 + L2 caching wired into `deploy\rag-query.ps1`. Cache lives in the pre-existing `faq-cache` index (14 fields, 3072-d HNSW cosine, validates `promptVersion` + `modelVersion` + `expiresAt`).
+L1 + L2 caching wired into `deploy\rag-query.ps1`. Cache lives in the pre-existing `cachebot-cache` index (14 fields, 3072-d HNSW cosine, validates `promptVersion` + `modelVersion` + `expiresAt`).
 
 | # | Scenario | Layer | Result |
 |---|---|---|---|
@@ -124,7 +124,7 @@ Test docs generated via Word COM (Word 2013+ required to *build* them; not to in
 | M1 | "How do I test a bot locally with Bot Framework Emulator in DoD?" | 0.818 on `.docx` chunk | `26-bot-emulator-dod.docx` | ✅ |
 | M2 | "How does FedRAMP High relate to the DoD Cloud SRG impact levels?" | 0.853 on `.pdf` chunk | `27-fedramp-vs-dod-srg.pdf` | ✅ |
 
-Final state: **27 docs in `faq-index`, 5 entries in `faq-cache`**.
+Final state: **27 docs in `cachebot-index`, 5 entries in `cachebot-cache`**.
 
 ## 9. Network posture change during ingest
 
@@ -137,7 +137,7 @@ CGNAT on this workstation caused Azure OpenAI to see a different public IP than 
 Built and deployed the Python orchestrator as an Azure Container Apps service, then wired the Azure Bot Service endpoint to it and confirmed a full round-trip through Direct Line.
 
 ### Build & push
-- Image `crfaqbotpilot1pbkgn5co6zxwe.azurecr.io/faq-orchestrator:0.1.0` (also `:latest`) built server-side via `az acr build` (client-side colorama unicode crash was cosmetic — server succeeded; verify via `az acr repository show-tags`).
+- Image `crfaqbotpilot1pbkgn5co6zxwe.azurecr.io/cachebot-orchestrator:0.1.0` (also `:latest`) built server-side via `az acr build` (client-side colorama unicode crash was cosmetic — server succeeded; verify via `az acr repository show-tags`).
 - Registry: ACR `crfaqbotpilot1pbkgn5co6zxwe` (Basic SKU) in `rg-faqbot-pilot1-eastus2`.
 
 ### Container Apps

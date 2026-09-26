@@ -1,4 +1,4 @@
-"""RAG pipeline mirroring dod-faq-bot/deploy/rag-query.ps1."""
+"""RAG pipeline mirroring cachebot/deploy/rag-query.ps1."""
 from __future__ import annotations
 
 import hashlib
@@ -21,8 +21,8 @@ AOAI_ENDPOINT   = os.environ["AOAI_ENDPOINT"].rstrip("/")
 EMBED_DEPLOY    = os.environ.get("EMBED_DEPLOY", "text-embedding-3-large")
 CHAT_DEPLOY     = os.environ.get("CHAT_DEPLOY",  "gpt-4o")
 SEARCH_ENDPOINT = os.environ["SEARCH_ENDPOINT"].rstrip("/")
-INDEX_NAME      = os.environ.get("INDEX_NAME",   "faq-index")
-CACHE_INDEX     = os.environ.get("CACHE_INDEX",  "faq-cache")
+INDEX_NAME      = os.environ.get("INDEX_NAME",   "cachebot-index")
+CACHE_INDEX     = os.environ.get("CACHE_INDEX",  "cachebot-cache")
 API_VERSION     = os.environ.get("AOAI_API_VERSION",   "2024-08-01-preview")
 SEARCH_API_VER  = os.environ.get("SEARCH_API_VERSION", "2024-07-01")
 

@@ -7,7 +7,7 @@ const OUT = path.join(__dirname, 'DoD-FAQ-Bot-Overview.pptx');
 const p = new pptxgen();
 p.author = 'Ralee Cook';
 p.company = 'Microsoft Federal - CAIP';
-p.title = 'DoD FAQ Bot - Overview';
+p.title = 'CACHEBOT - Overview';
 p.layout = 'LAYOUT_WIDE'; // 13.333 x 7.5 in
 
 // Palette: Ocean Gradient
@@ -24,7 +24,7 @@ const FONT_B = 'Calibri';
 
 const footer = (slide, num, total) => {
   slide.addShape('rect', { x: 0, y: 7.15, w: 13.333, h: 0.35, fill: { color: MIDNIGHT }, line: { color: MIDNIGHT } });
-  slide.addText('DoD FAQ Bot  |  Reference Architecture', {
+  slide.addText('CACHEBOT  |  Reference Architecture', {
     x: 0.4, y: 7.15, w: 8, h: 0.35, fontFace: FONT_B, fontSize: 10, color: 'CADCFC'
   });
   slide.addText(`${num} / ${total}`, {
@@ -40,7 +40,7 @@ const TOTAL = 10;
   s.background = { color: MIDNIGHT };
   // Accent bar
   s.addShape('rect', { x: 0, y: 0, w: 0.35, h: 7.5, fill: { color: ACCENT }, line: { color: ACCENT } });
-  s.addText('DoD FAQ Bot', {
+  s.addText('CACHEBOT', {
     x: 0.9, y: 2.4, w: 11.5, h: 1.4,
     fontFace: FONT_H, fontSize: 66, bold: true, color: WHITE
   });
@@ -220,7 +220,7 @@ const TOTAL = 10;
     { title: 'User escalates', body: 'Clicks Escalate on the bot response. Adaptive card asks reason + optional comment.' },
     { title: 'Bot captures context', body: 'Q, answer, retrieved chunks, model version, user UPN, channel, timestamp.' },
     { title: 'Row -> SharePoint list', body: '"FAQ Escalations" list. Graph Sites.Selected scoped to this one list.' },
-    { title: 'Ping triage in Teams', body: '@mention in "FAQ Bot - Triage" channel with deep link to the item.' },
+    { title: 'Ping triage in Teams', body: '@mention in "CACHEBOT - Triage" channel with deep link to the item.' },
     { title: 'Resolve + reply back', body: 'Owner marks Resolved. Proactive Bot Framework message goes back to the user.' }
   ];
   const stageW = 2.4;
@@ -283,7 +283,7 @@ const TOTAL = 10;
     },
     {
       title: 'L2  //  Semantic',
-      subtitle: 'Second AI Search index (faq-cache)',
+      subtitle: 'Second AI Search index (cachebot-cache)',
       color: TEAL,
       rows: [
         ['Hit criteria', 'Cosine similarity >= 0.95'],
@@ -416,7 +416,7 @@ const TOTAL = 10;
   const steps = [
     { n: '1', w: 'Wk 1', title: 'Foundations', body: 'Confirm IL5 + tenant boundary. Submit AOAI quota. Register Entra Gov bot app.' },
     { n: '2', w: 'Wk 2', title: 'Infra land', body: 'Bicep deployment: vNet, PE, Key Vault, AOAI, AI Search, VM, Bot Service.' },
-    { n: '3', w: 'Wk 3', title: 'Ingest + cache', body: 'SharePoint indexer + faq-cache index. Escalation list + triage channel.' },
+    { n: '3', w: 'Wk 3', title: 'Ingest + cache', body: 'SharePoint indexer + cachebot-cache index. Escalation list + triage channel.' },
     { n: '4', w: 'Wk 4', title: 'Orchestrator', body: 'Deploy orchestrator container with L1 + L2 caching. Wire Teams + Direct Line.' },
     { n: '5', w: 'Wk 5', title: 'Pilot', body: 'Pilot user group. Measure cache hit rate + escalation rate. Prompt tuning.' },
     { n: '6', w: 'Wk 6', title: 'Launch', body: 'Broad rollout. Budget alert at 90%. Observability dashboards published.' }

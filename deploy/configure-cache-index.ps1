@@ -1,5 +1,5 @@
 # =============================================================================
-#  Creates the L2 semantic-cache index (faq-cache) on the existing AI Search
+#  Creates the L2 semantic-cache index (cachebot-cache) on the existing AI Search
 #  service. Piggybacks on the S1 tier already provisioned by main.bicep - no
 #  new Azure resources.
 #
@@ -12,7 +12,7 @@
 param(
     [Parameter(Mandatory)] [string] $SearchServiceName,   # e.g. srch-faqbot-prd-abcd
     [Parameter(Mandatory)] [string] $AdminKey,            # or use bearer auth if disableLocalAuth is on
-    [string] $IndexName = 'faq-cache',
+    [string] $IndexName = 'cachebot-cache',
     [int]    $VectorDimensions = 3072                      # text-embedding-3-large
 )
 
@@ -40,7 +40,7 @@ $indexBody = @{
             type = 'Collection(Edm.Single)'
             searchable = $true
             dimensions = $VectorDimensions
-            vectorSearchProfile = 'faq-cache-hnsw'
+            vectorSearchProfile = 'cachebot-cache-hnsw'
         }
     )
     vectorSearch = @{
@@ -52,7 +52,7 @@ $indexBody = @{
             }
         )
         profiles = @(
-            @{ name = 'faq-cache-hnsw'; algorithm = 'hnsw-default' }
+            @{ name = 'cachebot-cache-hnsw'; algorithm = 'hnsw-default' }
         )
     }
 } | ConvertTo-Json -Depth 10

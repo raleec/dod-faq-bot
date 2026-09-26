@@ -1,4 +1,4 @@
-# DoD FAQ Bot — Reference Architecture + Pilot
+# CACHEBOT — Reference Architecture + Pilot
 
 A reference architecture and working pilot for a **RAG-based FAQ bot deployable to the Azure DoD region**. Users ask questions through Teams or a web chat channel; answers are grounded in a corpus indexed from a SharePoint list (or any doc set) using Azure AI Search + Azure OpenAI; unanswered/incorrect items can be escalated to a triage team.
 
@@ -16,10 +16,10 @@ The pilot in this repo was deployed to Azure Commercial (`eastus2`) as a proof-o
  │  Web / DL    │──▶│              │   │  ┌────────────────────┐   │
  └──────────────┘   └──────────────┘   │  │  L1 hash cache     │   │
                                        │  │  L2 vector cache   │───┼──▶ AI Search
-                                       │  └────────────────────┘   │    (faq-cache)
+                                       │  └────────────────────┘   │    (cachebot-cache)
                                        │           │               │
                                        │           ▼               │───▶ AI Search
-                                       │  ┌────────────────────┐   │    (faq-index)
+                                       │  ┌────────────────────┐   │    (cachebot-index)
                                        │  │  Vector retrieval  │───┼──▶ AOAI embeddings
                                        │  │  Chat completion   │───┼──▶ AOAI gpt-4o
                                        │  └────────────────────┘   │
@@ -90,7 +90,7 @@ long tail of similar phrasings (which is exactly the FAQ-bot workload).
                                          │ miss          └──────────────────┘
                                          ▼
                                   ┌──────────────┐
-                                  │  faq-index   │──▶ chat completion ──▶ answer
+                                  │  cachebot-index   │──▶ chat completion ──▶ answer
                                   │  retrieval   │                        + write cache
                                   └──────────────┘   ~2–4 s, ~1k prompt + ~150 completion tokens
 ```
@@ -103,10 +103,10 @@ vector search). Over time, hot canonical answers accumulate their common
 paraphrasings and the fast path becomes broader without duplicating cached
 answers.
 
-### `faq-cache` index schema (14 fields, HNSW cosine profile)
+### `cachebot-cache` index schema (14 fields, HNSW cosine profile)
 
-Both caches live in the **same Azure AI Search index** (`faq-cache`, sibling to
-`faq-index`). No additional Azure resources — the vector search piggybacks on
+Both caches live in the **same Azure AI Search index** (`cachebot-cache`, sibling to
+`cachebot-index`). No additional Azure resources — the vector search piggybacks on
 the AI Search Basic instance.
 
 | Field | Purpose |
@@ -186,13 +186,13 @@ reasonable. The tradeoffs shift as you extend TTL:
 | Risk | Grows with TTL? | Why | Mitigation |
 |---|---|---|---|
 | **Answer staleness** — cache returns policy/pricing/contact info that has since changed in the KB | **Yes, sharply** | Long TTL means most weight sits on `sourceDocsVersion` for invalidation | Bump `SOURCE_DOCS_VERSION` on **every material corpus change**; wire the ingest job to increment it automatically |
-| **Retrieval drift** — new/better chunks now exist in `faq-index` but the cache serves the old synthesis | Yes | Cache entry pins `retrievedChunkIds` at write time | Add "citation-integrity check": on cache read, verify all `retrievedChunkIds` still exist in `faq-index`; drop cache read if any are gone |
+| **Retrieval drift** — new/better chunks now exist in `cachebot-index` but the cache serves the old synthesis | Yes | Cache entry pins `retrievedChunkIds` at write time | Add "citation-integrity check": on cache read, verify all `retrievedChunkIds` still exist in `cachebot-index`; drop cache read if any are gone |
 | **Model regression** — AOAI ships a new `gpt-4o-YYYY-MM-DD` and the cached answer no longer matches a fresh call | Yes | `modelVersion` comes from the AOAI response header; auto-invalidates on rev, so this is mostly handled | Pin your deployment to a specific model rev (not "latest") so `modelVersion` is stable and you invalidate deliberately |
 | **Prompt/guardrail drift** — tightened safety filter, new PII rule, updated tone | Yes | Only fix is `PROMPT_VERSION` bump | Treat `PROMPT_VERSION` as a semver on the system prompt; bump on any material change |
 | **L2 false positives** — a 0.86-cosine paraphrase turns out to have subtly different intent | Yes | Larger cache = larger candidate set for near-matches | Raise `L2_THRESHOLD` as the cache grows (0.85 → 0.87 → 0.88); log cosine per hit and correlate with 👎 feedback |
 | **Cache poisoning** — a first-time wrong answer serves paraphrases for weeks | **Yes, sharply** | No automatic quality gate today | Wire 👎 / 🚩 signals from the adaptive card to a `negFeedbackCount` field; auto-evict on ≥ N thumbs-down or on any escalation triggered by a cache hit |
 | **Personalization leakage** — user A gets an answer that should have been personalized to their role/tenant | Yes | Cache key is question-only, not user-scoped | Either add `audienceKey` to the hash (destroys hit rate) or classify answers as "audience-agnostic" and only cache those. For the FAQ workload most items are shared-audience — the leak surface is small if you enforce `sensitivityLabel` |
-| **Regulatory / audit surface** — cached content inherits source doc sensitivity, must be purgeable | Yes | Long-lived derived data = longer retention obligation | Honor `sensitivityLabel` filter on reads; document that `az search index reset` on `faq-cache` is part of the DR / classified-doc-retract runbook |
+| **Regulatory / audit surface** — cached content inherits source doc sensitivity, must be purgeable | Yes | Long-lived derived data = longer retention obligation | Honor `sensitivityLabel` filter on reads; document that `az search index reset` on `cachebot-cache` is part of the DR / classified-doc-retract runbook |
 | **Storage cost** | ~none | Basic AI Search: $73/mo flat, 2 GB / ~130 k entries at ~15 KB/entry. At 500 unique Qs/day + 14-day TTL = ~7 k entries. Even at 90 days = ~45 k. Well inside Basic. | Move to Standard S1 (25 GB) only above ~130 k live entries |
 | **Cold-start bias** — early users' phrasing locks in for weeks | Yes | First writer wins on L2 | Seed the cache at deploy time with a curated FAQ list (one embedding per canonical question) |
 | **Thundering-herd on miss** — 100 users hit the same brand-new Q simultaneously, all miss, all call the LLM | Independent of TTL | Miss path has no in-flight de-dup today | Add per-replica in-flight lookup map keyed on question hash; first request goes to LLM, others await |
@@ -243,7 +243,7 @@ cd ../deploy
 
 # 3. Build + push the orchestrator container
 cd ../orchestrator
-az acr build --registry $env:ACR --image faq-orchestrator:0.1.0 .
+az acr build --registry $env:ACR --image cachebot-orchestrator:0.1.0 .
 
 # 4. Deploy Container App + wire Bot Service endpoint (see DEPLOYMENT-RUNBOOK.md §7)
 

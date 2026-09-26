@@ -25,7 +25,7 @@ resource bot 'Microsoft.BotService/botServices@2022-09-15' = {
   sku: { name: 'S1' }
   kind: 'azurebot'
   properties: {
-    displayName: 'DoD FAQ Bot (${env})'
+    displayName: 'CACHEBOT (${env})'
     endpoint: botEndpoint
     msaAppId: msaAppId
     msaAppType: 'SingleTenant'

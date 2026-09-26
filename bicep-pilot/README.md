@@ -1,4 +1,4 @@
-# DoD FAQ Bot — Bicep Skeleton
+# CACHEBOT — Bicep Skeleton
 
 Infrastructure-as-Code for the DoD-region FAQ bot (Teams + Web) described in
 `../DoD-FAQ-Bot-Architecture.docx`.

@@ -92,7 +92,7 @@ const children = [];
 children.push(new Paragraph({
   alignment: AlignmentType.CENTER,
   spacing: { before: 2400, after: 240 },
-  children: [new TextRun({ text: 'DoD FAQ Bot', bold: true, size: 56, color: NAVY, font: 'Arial' })]
+  children: [new TextRun({ text: 'CACHEBOT', bold: true, size: 56, color: NAVY, font: 'Arial' })]
 }));
 children.push(new Paragraph({
   alignment: AlignmentType.CENTER,
@@ -170,7 +170,7 @@ children.push(makeTable(
     ['Ingest', 'AI Search SharePoint Online indexer', 'Incremental crawl of one or more libraries via SharePoint change log.'],
     ['Source', 'SharePoint Online (DoD / GCC-High)', 'The authoritative document library. Access preserved at click-through.'],
   ['Escalation store', 'SharePoint Online custom list "FAQ Escalations"', 'One row per escalation. Columns: question, answer, retrieved chunk IDs, user UPN, channel, status, triage owner, resolution notes.'],
-  ['Escalation notify', 'Microsoft Graph -> Teams channel message', 'Bot app posts an @mention with a deep link to the SharePoint list item into a "FAQ Bot - Triage" Teams channel.'],
+  ['Escalation notify', 'Microsoft Graph -> Teams channel message', 'Bot app posts an @mention with a deep link to the SharePoint list item into a "CACHEBOT - Triage" Teams channel.'],
   ['Secrets', 'Azure Key Vault Premium', 'RBAC-only, purge-protected, private endpoint. Stores bot MSA secret and any bootstrap secrets.'],
   ['Observability', 'Log Analytics + Application Insights', 'Traces, cost signals, answer-quality telemetry, escalation-rate KPI.'],
   ['Identity', 'Microsoft Entra ID (Government)', 'Managed identity on the VM; app registration for the bot with Sites.Selected on the escalations list + ChannelMessage.Send.Group on the triage team.']
@@ -195,7 +195,7 @@ children.push(numbered('All spans (retrieve, embed, complete) are traced to Appl
 children.push(h2('4.3 Escalation flow'));
 children.push(numbered('User clicks Escalate on any bot response, or the orchestrator auto-offers escalation when retrieval confidence is below threshold. A short Adaptive Card dialog asks the user to pick a reason ("Answer is wrong", "Bot said it did not know", "Answer is incomplete", "Other") and add an optional comment.'));
 children.push(numbered('Orchestrator writes a row to the "FAQ Escalations" SharePoint list using Microsoft Graph (Sites.Selected on that list only). The row captures: user UPN, channel (Teams or Web), timestamp, original question, generated answer, retrieved chunk IDs + source URLs, model + prompt-template version, reason code, and free-text comment.'));
-children.push(numbered('Immediately after the write, the orchestrator posts an Adaptive Card into the "FAQ Bot — Triage" Teams channel with an @mention of the on-call triage owner group, a summary of the question, and a deep link to the SharePoint list item. Posting uses application-permissions ChannelMessage.Send.Group scoped to the single triage team.'));
+children.push(numbered('Immediately after the write, the orchestrator posts an Adaptive Card into the "CACHEBOT — Triage" Teams channel with an @mention of the on-call triage owner group, a summary of the question, and a deep link to the SharePoint list item. Posting uses application-permissions ChannelMessage.Send.Group scoped to the single triage team.'));
 children.push(numbered('The user sees a confirmation ("Thanks — this has been sent to the triage team as ticket #NNN. You will hear back in this chat when it is resolved.").'));
 children.push(numbered('Triage team works the item in SharePoint. When they mark it Resolved, a lightweight Power Automate flow (or Logic App) triggers a Bot Framework proactive message back to the original user with the answer and, if the source docs were updated, a note that the bot will now answer this itself.'));
 
@@ -212,7 +212,7 @@ children.push(makeTable(
   ['Tier', 'Where', 'Hit criteria', 'TTL', 'Purpose'],
   [
     ['L1 exact', 'In-process LRU on the orchestrator VM (~10k entries, ~50 MB RAM).', 'Normalized-string equality of question.', '1 hour', 'Catch identical repeats; near-zero latency; zero infra cost.'],
-    ['L2 semantic', 'Second Azure AI Search index (faq-cache) on the same S1 service.', 'Cosine similarity between query embedding and cached-query embedding >= 0.95.', '24 hours', 'Catch paraphrases; rides on the AI Search + private endpoint you already pay for.']
+    ['L2 semantic', 'Second Azure AI Search index (cachebot-cache) on the same S1 service.', 'Cosine similarity between query embedding and cached-query embedding >= 0.95.', '24 hours', 'Catch paraphrases; rides on the AI Search + private endpoint you already pay for.']
   ]
 ));
 
@@ -285,9 +285,9 @@ children.push(numbered('Confirm Azure Government subscription + IL5 enclave; ver
 children.push(numbered('Submit and land Azure OpenAI quota (see aoai-quota-request.md).'));
 children.push(numbered('Register the bot app in Entra Gov with delegated permissions to read the target SharePoint library.'));
 children.push(numbered('Deploy the infrastructure using the Bicep skeleton in bicep/ (subscription-scope deployment; see bicep/README.md).'));
-children.push(numbered('Configure the SharePoint indexer on AI Search (data-plane configuration, not ARM). Provision the second AI Search index for the L2 semantic cache (faq-cache) using the schema in deploy/configure-cache-index.ps1.'));
+children.push(numbered('Configure the SharePoint indexer on AI Search (data-plane configuration, not ARM). Provision the second AI Search index for the L2 semantic cache (cachebot-cache) using the schema in deploy/configure-cache-index.ps1.'));
 children.push(numbered('Build and push the orchestrator container image to the customer\'s ACR; the VM cloud-init pulls and runs it. Orchestrator ships with L1 LRU + L2 semantic cache enabled by default; cache TTLs and no-cache allowlists are configurable via Key Vault.'));
-children.push(numbered('Provision the "FAQ Escalations" SharePoint list, create the "FAQ Bot — Triage" Teams channel, grant Sites.Selected + ChannelMessage.Send.Group to the bot app registration, and validate an end-to-end escalation with a test user.'));
+children.push(numbered('Provision the "FAQ Escalations" SharePoint list, create the "CACHEBOT — Triage" Teams channel, grant Sites.Selected + ChannelMessage.Send.Group to the bot app registration, and validate an end-to-end escalation with a test user.'));
 children.push(numbered('Wire the Bot Service Teams channel + Direct Line site; publish the Teams manifest and the web-embed HTML.'));
 children.push(numbered('Pilot with a small user group, iterate on chunk size, top-k, and system prompt based on Application Insights telemetry. Track escalation rate as the primary quality KPI.'));
 
@@ -322,7 +322,7 @@ children.push(bullet('Web chat hosting location: existing internal portal or a n
 // ------ document ------
 const doc = new Document({
   creator: 'Ralee Cook',
-  title: 'DoD FAQ Bot — Reference Architecture',
+  title: 'CACHEBOT — Reference Architecture',
   styles: {
     default: {
       document: { run: { font: 'Arial', size: 22 } }
@@ -371,7 +371,7 @@ const doc = new Document({
       default: new Header({
         children: [new Paragraph({
           alignment: AlignmentType.RIGHT,
-          children: [new TextRun({ text: 'DoD FAQ Bot — Reference Architecture', size: 18, color: SLATE, italics: true })]
+          children: [new TextRun({ text: 'CACHEBOT — Reference Architecture', size: 18, color: SLATE, italics: true })]
         })]
       })
     },

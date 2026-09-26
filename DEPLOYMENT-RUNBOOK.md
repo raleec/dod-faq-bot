@@ -1,4 +1,4 @@
-# DoD FAQ Bot — Pilot Deployment Runbook
+# CACHEBOT — Pilot Deployment Runbook
 
 > **Scope:** Commercial-cloud proof-of-pattern of the DoD FAQ-bot architecture,
 > deployed into the MngEnvMCAP217858 sandbox subscription. **NOT** an IL5
@@ -200,7 +200,7 @@ $adminKey = az search admin-key show --service-name $searchName -g $rg --query p
 $endpoint = "https://$searchName.search.windows.net"
 
 $indexBody = @{
-    name = 'faq-cache'
+    name = 'cachebot-cache'
     fields = @(
         @{ name='id';                type='Edm.String';         key=$true;  filterable=$true }
         @{ name='cacheKeyHash';      type='Collection(Edm.String)'; filterable=$true }             # L1 SHA-256 lookup (list; L2 hits append their own hash)
@@ -216,22 +216,22 @@ $indexBody = @{
         @{ name='createdAt';         type='Edm.DateTimeOffset'; filterable=$true; sortable=$true }
         @{ name='expiresAt';         type='Edm.DateTimeOffset'; filterable=$true }               # TTL enforcement
         @{ name='questionEmbedding'; type='Collection(Edm.Single)';
-          dimensions=3072; vectorSearchProfile='faq-cache-hnsw' }                                # L2 vector field
+          dimensions=3072; vectorSearchProfile='cachebot-cache-hnsw' }                                # L2 vector field
     )
     vectorSearch = @{
         algorithms = @(@{ name='hnsw-cosine'; kind='hnsw';
                           hnswParameters=@{ metric='cosine'; m=4; efConstruction=400; efSearch=500 } })
-        profiles   = @(@{ name='faq-cache-hnsw'; algorithm='hnsw-cosine' })
+        profiles   = @(@{ name='cachebot-cache-hnsw'; algorithm='hnsw-cosine' })
     }
 } | ConvertTo-Json -Depth 10
 
 Invoke-RestMethod -Method PUT `
-  -Uri  "$endpoint/indexes/faq-cache?api-version=2024-07-01" `
+  -Uri  "$endpoint/indexes/cachebot-cache?api-version=2024-07-01" `
   -Headers @{ 'api-key' = $adminKey; 'Content-Type' = 'application/json' } `
   -Body $indexBody
 ```
 
-Result: index `faq-cache` created — **14 fields, `faq-cache-hnsw` HNSW / cosine profile**.
+Result: index `cachebot-cache` created — **14 fields, `cachebot-cache-hnsw` HNSW / cosine profile**.
 
 **Runtime behavior** (mirrored between `orchestrator/rag.py` and `deploy/rag-query.ps1`):
 
@@ -239,7 +239,7 @@ Result: index `faq-cache` created — **14 fields, `faq-cache-hnsw` HNSW / cosin
 2. **Miss → embed** the question with `text-embedding-3-large` (3072-d).
 3. **L2 lookup** — POST `docs/search` with a `vectorQueries` block against `questionEmbedding` (k=1) + the same filter as L1 (minus the `cacheKeyHash` clause). Azure AI Search returns `@search.score = 1 / (2 - cosine)`; the code inverts back to raw cosine and compares to `L2_THRESHOLD` (default `0.85`). Empirically the useful range for `text-embedding-3-large` is `0.82–0.88`; the industry-default `0.92` almost never fires on this model.
 4. **L2 → L1 promotion** — on an L2 hit, the current question's SHA-256 is *appended* to the winning entry's `cacheKeyHash` collection (with a FIFO cap of `MAX_L1_ALIASES = 32`), and `hitCount` is bumped, in a single `merge` write. **The next time that exact same paraphrase is asked, it wins on L1 — no embed step, no vector search.** Over time the top-N canonical entries accumulate their most common alias phrasings and the hot path becomes an L1 filter with 1 round-trip to Search.
-5. **Miss → RAG** — full retrieval on `faq-index` + chat completion, then **write the answer back** to `faq-cache` with a fresh `id`, `cacheKeyHash=[<sha>]`, `questionEmbedding`, `createdAt`, and `expiresAt = now + CACHE_TTL_HOURS`.
+5. **Miss → RAG** — full retrieval on `cachebot-index` + chat completion, then **write the answer back** to `cachebot-cache` with a fresh `id`, `cacheKeyHash=[<sha>]`, `questionEmbedding`, `createdAt`, and `expiresAt = now + CACHE_TTL_HOURS`.
 
 **Invalidation** is baked into the filter clause — no purge job needed:
 
@@ -248,7 +248,7 @@ Result: index `faq-cache` created — **14 fields, `faq-cache-hnsw` HNSW / cosin
 | System prompt | `PROMPT_VERSION` env / `-PromptVersion` param | Prior entries become invisible to the filter and are eventually reaped by TTL |
 | Model swap | `modelVersion` (auto-derived from AOAI deployment) | Same |
 | Corpus reindex | `SOURCE_DOCS_VERSION` env | Same |
-| Emergency purge | Manual DELETE on `faq-cache` docs, or delete + recreate the index | Instant |
+| Emergency purge | Manual DELETE on `cachebot-cache` docs, or delete + recreate the index | Instant |
 
 The full standalone body lives in `deploy/configure-cache-index.ps1` — that
 script hardcodes the DoD `*.search.azure.us` suffix, so the block above is the
@@ -287,7 +287,7 @@ Pilot lifetime: ~1 week from 2026-09-21. Teardown script committed at
 
 ```powershell
 # From the workspace root
-cd 'C:\Users\raleecook\OneDrive - Microsoft\Documents\Microsoft Scout\dod-faq-bot'
+cd 'C:\Users\raleecook\OneDrive - Microsoft\Documents\Microsoft Scout\cachebot'
 
 # Dry run first
 .\deploy\teardown-pilot.ps1 -WhatIf

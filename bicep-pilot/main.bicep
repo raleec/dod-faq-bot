@@ -1,5 +1,5 @@
 // =========================================================================
-//  DoD FAQ Bot - PILOT (Commercial variant)
+//  CACHEBOT - PILOT (Commercial variant)
 //  Target: Azure Commercial (eastus2) - proof of pattern only, NOT IL5.
 //  Original DoD variant is preserved in ../bicep/ for the customer engagement.
 //  Deploys: vNet + PE, Key Vault, AOAI, AI Search, VM (orchestrator),
