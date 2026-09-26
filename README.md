@@ -1,6 +1,6 @@
 # CACHEBOT — Reference Architecture + Pilot
 
-A reference architecture and working pilot for a **RAG-based FAQ bot deployable to the Azure DoD region**. Users ask questions through Teams or a web chat channel; answers are grounded in a corpus indexed from a SharePoint list (or any doc set) using Azure AI Search + Azure OpenAI; unanswered/incorrect items can be escalated to a triage team.
+A reference architecture and working pilot for a **RAG-based FAQ bot deployable to the Azure**. Users ask questions through Teams or a web chat channel; answers are grounded in a corpus indexed from a SharePoint list (or any doc set) using Azure AI Search + Azure OpenAI; unanswered/incorrect items can be escalated to a triage team.
 
 The pilot in this repo was deployed to Azure Commercial (`eastus2`) as a proof-of-pattern before the customer's DoD build-out — the Bicep, orchestrator code, and runbook translate 1:1 to `usgovvirginia` / `usdodeast` with only region + endpoint substitutions.
 
